@@ -1,14 +1,8 @@
 import sys
 
-from PyQt6.QtWidgets import QApplication, QMainWindow
+from PyQt6.QtWidgets import QApplication
 
-
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-
-        self.setWindowTitle("TAMS - Coaching Management System")
-        self.resize(1200, 800)
+from app.ui.main_window import MainWindow
 
 
 def main():

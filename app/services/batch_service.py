@@ -1,3 +1,4 @@
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -69,6 +70,17 @@ def update_batch(
     if active is not None:
         batch.active = active
 
+    session.commit()
+    session.refresh(batch)
+
+    return batch
+def deactivate_batch(session, batch_id):
+    batch = get_batch(session, batch_id)
+
+    if batch is None:
+        return None
+
+    batch.active = False
     session.commit()
     session.refresh(batch)
 

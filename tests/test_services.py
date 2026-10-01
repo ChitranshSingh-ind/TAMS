@@ -9,6 +9,7 @@ from app.services.batch_service import create_batch, get_active_batches
 from app.services.student_service import (
     create_student,
     get_students_by_batch,
+    count_students,
 )
 
 

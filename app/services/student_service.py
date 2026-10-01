@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.database.models.student import Student
@@ -62,6 +62,13 @@ def get_students_by_batch(
         statement = statement.where(Student.status == "ACTIVE")
 
     return list(session.scalars(statement).all())
+
+
+def count_students(session: Session, batch_id: int | None = None) -> int:
+    statement = (select(func.count(Student.id)).where(Student.status == "ACTIVE"))
+    if batch_id is not None:
+        statement = statement.where(Student.batch_id == batch_id)
+    return session.scalar(statement) or 0
 
 
 def update_student(

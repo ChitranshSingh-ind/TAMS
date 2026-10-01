@@ -1,5 +1,6 @@
 from PyQt6.QtCore import Qt
 from datetime import time
+from PyQt6.QtCore import QTime
 
 from PyQt6.QtWidgets import (
     QAbstractSpinBox,
@@ -19,14 +20,17 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QCheckBox,
     QSizePolicy,
-)
+    QLineEdit,
 
+)
+from app.database.models.batch import Batch
 from app.database.connection import SessionLocal
 from app.services.batch_service import (
     create_batch,
     get_active_batches,
     update_batch,
     deactivate_batch,
+    reactivate_batch,
     get_batch,
 )
 
@@ -305,8 +309,59 @@ class SettingsDialog(QDialog):
         )
 
         layout.addWidget(card, 1)
+        inactive_card = QFrame()
+        inactive_card.setObjectName("settingsCard")
+
+        inactive_layout = QVBoxLayout(inactive_card)
+        inactive_layout.setContentsMargins(20, 20, 20, 20)
+        inactive_layout.setSpacing(12)
+
+        inactive_header = QHBoxLayout()
+
+        inactive_title = QLabel("Deactivated batches")
+        inactive_title.setObjectName("cardTitle")
+
+        inactive_header.addWidget(inactive_title)
+        inactive_header.addStretch()
+
+        inactive_layout.addLayout(inactive_header)
+
+        self.inactive_batch_list_container = QWidget()
+
+        self.inactive_batch_list_layout = QVBoxLayout(
+            self.inactive_batch_list_container
+        )
+        self.inactive_batch_list_layout.setContentsMargins(0, 5, 0, 5)
+        self.inactive_batch_list_layout.setSpacing(10)
+        self.inactive_batch_list_layout.setAlignment(
+            Qt.AlignmentFlag.AlignTop
+        )
+
+        inactive_scroll = QScrollArea()
+        inactive_scroll.setWidgetResizable(True)
+        inactive_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        inactive_scroll.setMaximumHeight(250)
+        inactive_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+        """)
+
+        inactive_scroll.setWidget(
+            self.inactive_batch_list_container
+        )
+
+        inactive_layout.addWidget(inactive_scroll)
+
+        layout.addWidget(inactive_card)
 
         return page
+    
     def create_placeholder_page(self, title_text, description_text):
         page = QWidget()
 
@@ -327,6 +382,33 @@ class SettingsDialog(QDialog):
 
     def apply_styles(self):
         self.setStyleSheet(f"""
+            QMessageBox {{
+    background: #FEFEFE;
+}}
+
+QMessageBox QLabel {{
+    color: #012D54;
+    font-size: 13px;
+}}
+
+QMessageBox QPushButton {{
+    background: #FEFEFE;
+    color: #012D54;
+    border: 1px solid #E9DEBA;
+    border-radius: 7px;
+    padding: 8px 18px;
+    min-width: 70px;
+    font-weight: 600;
+}}
+
+QMessageBox QPushButton:hover {{
+    background: #E9DEBA;
+}}
+
+QMessageBox QPushButton:pressed {{
+    background: #D9B85F;
+    color: #012D54;
+    }}
             QDialog {{
                 background: {CREAM};
             }}
@@ -508,16 +590,21 @@ class SettingsDialog(QDialog):
 
             if not batches:
                 empty_label = QLabel(
-                    "No batches have been created yet."
+                    "No active batches."
                 )
                 empty_label.setObjectName("emptyLabel")
-                empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
+                empty_label.setAlignment(
+                    Qt.AlignmentFlag.AlignCenter
+                )
                 self.batch_list_layout.addWidget(empty_label)
-                return
+            else:
+                for batch in batches:
+                    self.add_batch_card(batch)
 
-            for batch in batches:
-                self.add_batch_card(batch)
+            self.load_inactive_batches()
+
+            
+            
     def add_batch_card(self, batch):
         card = QFrame()
         card.setObjectName("batchItem")
@@ -975,6 +1062,481 @@ class SettingsDialog(QDialog):
     background: {DARK_NAVY};
     color: {WHITE};
 }}
+        #inactiveBatchStatus {{
+    color: #615F4B;
+    background: #F0EFE8;
+    padding: 5px 9px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+}}
         """)
 
         dialog.exec()
+    def open_edit_batch_dialog(self, batch):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Edit Batch")
+        dialog.setFixedSize(560, 500)
+
+        main_layout = QVBoxLayout(dialog)
+        main_layout.setContentsMargins(28, 24, 28, 24)
+        main_layout.setSpacing(0)
+
+        # Header
+        header_layout = QHBoxLayout()
+
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(3)
+
+        title = QLabel("Edit Batch")
+        title.setObjectName("dialogTitle")
+
+        subtitle = QLabel("Update the batch details")
+        subtitle.setObjectName("dialogSubtitle")
+
+        title_layout.addWidget(title)
+        title_layout.addWidget(subtitle)
+
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+
+        close_button = QPushButton("×")
+        close_button.setObjectName("dialogCloseButton")
+        close_button.setFixedSize(34, 34)
+        close_button.clicked.connect(dialog.reject)
+
+        header_layout.addWidget(close_button)
+
+        main_layout.addLayout(header_layout)
+
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setObjectName("dialogSeparator")
+
+        main_layout.addWidget(separator)
+        main_layout.addSpacing(22)
+
+        # Batch name
+        name_label = QLabel("BATCH NAME")
+        name_label.setObjectName("formLabel")
+
+        main_layout.addWidget(name_label)
+        main_layout.addSpacing(6)
+
+        name_input = QLineEdit()
+        name_input.setText(batch.name)
+        name_input.setMinimumHeight(42)
+
+        main_layout.addWidget(name_input)
+
+        main_layout.addSpacing(20)
+
+        # Schedule
+        schedule_label = QLabel("SCHEDULE")
+        schedule_label.setObjectName("formLabel")
+
+        main_layout.addWidget(schedule_label)
+        main_layout.addSpacing(6)
+
+        time_layout = QHBoxLayout()
+        time_layout.setSpacing(14)
+
+        start_box = QVBoxLayout()
+        start_box.setSpacing(5)
+
+        start_caption = QLabel("Start Time")
+        start_caption.setObjectName("smallLabel")
+
+        start_input = TAMSTimeEdit()
+        start_input.setDisplayFormat("hh:mm AP")
+        start_input.setTime(
+            QTime(
+                batch.start_time.hour,
+                batch.start_time.minute,
+            )
+        )
+
+        start_box.addWidget(start_caption)
+        start_box.addWidget(start_input)
+
+        end_box = QVBoxLayout()
+        end_box.setSpacing(5)
+
+        end_caption = QLabel("End Time")
+        end_caption.setObjectName("smallLabel")
+
+        end_input = TAMSTimeEdit()
+        end_input.setDisplayFormat("hh:mm AP")
+        end_input.setTime(
+            QTime(
+                batch.end_time.hour,
+                batch.end_time.minute,
+            )
+        )
+
+        end_box.addWidget(end_caption)
+        end_box.addWidget(end_input)
+
+        time_layout.addLayout(start_box)
+        time_layout.addLayout(end_box)
+
+        main_layout.addLayout(time_layout)
+
+        main_layout.addSpacing(20)
+
+        # Days
+        days_label = QLabel("CLASS DAYS")
+        days_label.setObjectName("formLabel")
+
+        main_layout.addWidget(days_label)
+        main_layout.addSpacing(8)
+
+        days_layout = QHBoxLayout()
+        days_layout.setSpacing(7)
+
+        day_names = [
+            ("Mon", "Monday"),
+            ("Tue", "Tuesday"),
+            ("Wed", "Wednesday"),
+            ("Thu", "Thursday"),
+            ("Fri", "Friday"),
+            ("Sat", "Saturday"),
+            ("Sun", "Sunday"),
+        ]
+
+        existing_days = {
+            day.strip()
+            for day in batch.days.split(",")
+        }
+
+        day_buttons = []
+
+        for short_name, full_name in day_names:
+            button = QPushButton(short_name)
+            button.setCheckable(True)
+            button.setObjectName("dayButton")
+            button.setProperty("day_name", full_name)
+            button.setMinimumSize(60, 38)
+
+            if full_name in existing_days:
+                button.setChecked(True)
+
+            day_buttons.append(button)
+            days_layout.addWidget(button)
+
+        main_layout.addLayout(days_layout)
+
+        main_layout.addStretch()
+
+        # Bottom separator
+        bottom_separator = QFrame()
+        bottom_separator.setFrameShape(QFrame.Shape.HLine)
+        bottom_separator.setObjectName("dialogSeparator")
+
+        main_layout.addWidget(bottom_separator)
+        main_layout.addSpacing(15)
+
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setObjectName("cancelButton")
+        cancel_button.setMinimumSize(100, 40)
+        cancel_button.clicked.connect(dialog.reject)
+
+        save_button = QPushButton("Save Changes")
+        save_button.setObjectName("createButton")
+        save_button.setMinimumSize(125, 40)
+
+        button_layout.addWidget(cancel_button)
+        button_layout.addWidget(save_button)
+
+        main_layout.addLayout(button_layout)
+
+        # Save
+        def save_changes():
+            name = name_input.text().strip()
+
+            if not name:
+                QMessageBox.warning(
+                    dialog,
+                    "Missing Batch Name",
+                    "Please enter a batch name.",
+                )
+                return
+
+            if start_input.time() >= end_input.time():
+                QMessageBox.warning(
+                    dialog,
+                    "Invalid Time",
+                    "End time must be later than start time.",
+                )
+                return
+
+            selected_days = [
+                button.property("day_name")
+                for button in day_buttons
+                if button.isChecked()
+            ]
+
+            if not selected_days:
+                QMessageBox.warning(
+                    dialog,
+                    "No Days Selected",
+                    "Please select at least one class day.",
+                )
+                return
+
+            with SessionLocal() as session:
+                update_batch(
+                    session,
+                    batch.id,
+                    name=name,
+                    start_time=start_input.time().toPyTime(),
+                    end_time=end_input.time().toPyTime(),
+                    days=", ".join(selected_days),
+                )
+
+            self.load_batches()
+            dialog.accept()
+
+        save_button.clicked.connect(save_changes)
+
+        # Same TAMS styling
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background: {CREAM};
+            }}
+
+            #dialogTitle {{
+                color: {NAVY};
+                font-size: 22px;
+                font-weight: 700;
+            }}
+
+            #dialogSubtitle {{
+                color: {MUTED};
+                font-size: 12px;
+            }}
+
+            #dialogCloseButton {{
+                background: transparent;
+                color: {MUTED};
+                border: none;
+                font-size: 25px;
+                border-radius: 17px;
+            }}
+
+            #dialogCloseButton:hover {{
+                background: {LIGHT_GOLD};
+                color: {NAVY};
+            }}
+
+            #dialogSeparator {{
+                color: {LIGHT_GOLD};
+                background: {LIGHT_GOLD};
+                max-height: 1px;
+            }}
+
+            #formLabel {{
+                color: {NAVY};
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }}
+
+            #smallLabel {{
+                color: {MUTED};
+                font-size: 11px;
+            }}
+
+            QLineEdit,
+            QTimeEdit {{
+                background: {WHITE};
+                color: {TEXT};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 7px;
+                padding: 8px 10px;
+                font-size: 13px;
+            }}
+
+            QLineEdit:focus,
+            QTimeEdit:focus {{
+                border: 1px solid {GOLD};
+            }}
+
+            #timeArrowButton {{
+                background: {LIGHT_GOLD};
+                color: {NAVY};
+                border: none;
+                font-size: 8px;
+                padding: 0px;
+            }}
+
+            #timeArrowButton:hover {{
+                background: {GOLD};
+            }}
+
+            #timeArrowButton:pressed {{
+                background: {DARK_NAVY};
+                color: {WHITE};
+            }}
+
+            #dayButton {{
+                background: {WHITE};
+                color: {NAVY};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 7px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+
+            #dayButton:hover {{
+                background: {LIGHT_GOLD};
+            }}
+
+            #dayButton:checked {{
+                background: {GOLD};
+                color: {NAVY};
+                border: 1px solid {GOLD};
+                font-weight: 700;
+            }}
+
+            #cancelButton {{
+                background: {WHITE};
+                color: {NAVY};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 7px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }}
+
+            #cancelButton:hover {{
+                background: {LIGHT_GOLD};
+            }}
+
+            #createButton {{
+                background: {NAVY};
+                color: {WHITE};
+                border: none;
+                border-radius: 7px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }}
+
+            #createButton:hover {{
+                background: {DARK_NAVY};
+            }}
+        """)
+
+        dialog.exec()
+    def get_inactive_batches(self):
+        with SessionLocal() as session:
+            from app.database.models.batch import Batch
+
+            return (
+                session.query(Batch)
+                .filter(Batch.active.is_(False))
+                .order_by(Batch.name)
+                .all()
+            )
+    def reactivate_batch(self, batch):
+        result = QMessageBox.question(
+            self,
+            "Reactivate Batch",
+            (
+                f"Reactivate '{batch.name}'?\n\n"
+                "This batch will become active again and "
+                "will appear in the main batch selector."
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+
+        if result != QMessageBox.StandardButton.Yes:
+            return
+
+        with SessionLocal() as session:
+            reactivate_batch(session, batch.id)
+
+        self.load_batches()
+    def load_inactive_batches(self):
+        while self.inactive_batch_list_layout.count():
+            item = self.inactive_batch_list_layout.takeAt(0)
+
+            if item.widget():
+                item.widget().deleteLater()
+
+        with SessionLocal() as session:
+            batches = (
+                session.query(Batch)
+                .filter(Batch.active.is_(False))
+                .order_by(Batch.name)
+                .all()
+            )
+
+            if not batches:
+                empty_label = QLabel(
+                    "No deactivated batches."
+                )
+                empty_label.setObjectName("emptyLabel")
+                empty_label.setAlignment(
+                    Qt.AlignmentFlag.AlignCenter
+                )
+
+                self.inactive_batch_list_layout.addWidget(
+                    empty_label
+                )
+                return
+
+            for batch in batches:
+                self.add_inactive_batch_card(batch)
+    def add_inactive_batch_card(self, batch):
+        card = QFrame()
+        card.setObjectName("batchItem")
+        card.setMinimumHeight(90)
+        card.setMaximumHeight(100)
+
+        card.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(18, 12, 18, 12)
+
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(4)
+
+        name = QLabel(batch.name)
+        name.setObjectName("batchName")
+
+        timing = QLabel(
+            f"{batch.start_time.strftime('%I:%M %p')}  –  "
+            f"{batch.end_time.strftime('%I:%M %p')}\n"
+            f"{batch.days}"
+        )
+        timing.setObjectName("batchInfo")
+
+        info_layout.addWidget(name)
+        info_layout.addWidget(timing)
+
+        layout.addLayout(info_layout)
+        layout.addStretch()
+
+        status = QLabel("INACTIVE")
+        status.setObjectName("inactiveBatchStatus")
+        layout.addWidget(status)
+
+        reactivate_button = QPushButton("Reactivate")
+        reactivate_button.setObjectName("secondaryButton")
+
+        reactivate_button.clicked.connect(
+            lambda checked=False, b=batch:
+            self.reactivate_batch(b)
+        )
+
+        layout.addWidget(reactivate_button)
+
+        self.inactive_batch_list_layout.addWidget(card)

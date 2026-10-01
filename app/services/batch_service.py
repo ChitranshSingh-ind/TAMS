@@ -81,6 +81,20 @@ def deactivate_batch(session, batch_id):
         return None
 
     batch.active = False
+
+    session.commit()
+    session.refresh(batch)
+
+    return batch
+def reactivate_batch(session, batch_id):
+    
+    batch = get_batch(session, batch_id)
+
+    if batch is None:
+        return None
+
+    batch.active = True
+
     session.commit()
     session.refresh(batch)
 

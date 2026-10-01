@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget,
     QVBoxLayout,
     QWidget,
+    QGridLayout,
 )
 
 NAVY = "#012D54"
@@ -149,9 +150,11 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addStretch()
         
-
+        self.pages.addWidget(self.create_dashboard_page())
         # Placeholder pages
-        for name, _ in menu_items:
+        for name, index in menu_items:
+            if index == 0:
+                continue
             page = QWidget()
             layout = QVBoxLayout(page)
 
@@ -162,7 +165,6 @@ class MainWindow(QMainWindow):
             layout.addWidget(label)
 
             self.pages.addWidget(page)
-
         workspace_layout.addWidget(self.pages)
         content_layout.addLayout(workspace_layout)
 
@@ -173,6 +175,7 @@ class MainWindow(QMainWindow):
     def open_settings(self):
         dialog = SettingsDialog(self)
         dialog.exec()
+        self.load_batches()
         
     def apply_styles(self):
         self.setStyleSheet(f"""
@@ -269,6 +272,65 @@ class MainWindow(QMainWindow):
                 color: {NAVY};
                 font-weight: 700;
             }}
+            #dashboardPage {{
+        background: #F8F6EA;
+    }}
+
+    #dashboardGreeting {{
+        color: #012D54;
+        font-size: 26px;
+        font-weight: 700;
+    }}
+
+    #dashboardSubtitle {{
+        color: #615F4B;
+        font-size: 13px;
+    }}
+
+    #dashboardCard {{
+        background: #FEFEFE;
+        border: 1px solid #E9DEBA;
+        border-radius: 10px;
+    }}
+
+    #dashboardCard:hover {{
+        border: 1px solid #D9B85F;
+    }}
+
+    #dashboardCardTitle {{
+        color: #615F4B;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+
+    #dashboardCardValue {{
+        color: #012D54;
+        font-size: 28px;
+        font-weight: 700;
+    }}
+
+    #dashboardCardDescription {{
+        color: #615F4B;
+        font-size: 11px;
+    }}
+
+    #dashboardSectionCard {{
+        background: #FEFEFE;
+        border: 1px solid #E9DEBA;
+        border-radius: 10px;
+        min-height: 180px;
+    }}
+
+    #dashboardSectionTitle {{
+        color: #012D54;
+        font-size: 16px;
+        font-weight: 700;
+    }}
+
+    #dashboardSectionText {{
+        color: #615F4B;
+        font-size: 13px;
+    }}
         """)
     def change_page(self,index):
         self.pages.setCurrentIndex(index)
@@ -290,4 +352,120 @@ class MainWindow(QMainWindow):
                 )
                 
         self.pages.setCurrentIndex(0)
-    
+
+    def create_dashboard_page(self):
+        page = QWidget()
+        page.setObjectName("dashboardPage")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 25, 30, 25)
+        layout.setSpacing(20)
+
+        # ── Header ──────────────────────────────────────
+        header_layout = QVBoxLayout()
+        header_layout.setSpacing(4)
+
+        greeting = QLabel("Good afternoon 👋")
+        greeting.setObjectName("dashboardGreeting")
+
+        subtitle = QLabel(
+            "Here's what's happening with your coaching today."
+        )
+        subtitle.setObjectName("dashboardSubtitle")
+
+        header_layout.addWidget(greeting)
+        header_layout.addWidget(subtitle)
+
+        layout.addLayout(header_layout)
+
+        # ── Summary Cards ───────────────────────────────
+        cards_layout = QGridLayout()
+        cards_layout.setSpacing(15)
+
+        cards = [
+            ("Students", "0", "Total students"),
+            ("Attendance", "—", "Today's attendance"),
+            ("Fees Pending", "₹0", "Outstanding amount"),
+            ("Upcoming Tests", "0", "Tests scheduled"),
+        ]
+
+        for column, (title, value, description) in enumerate(cards):
+            card = QFrame()
+            card.setObjectName("dashboardCard")
+            card.setMinimumHeight(125)
+
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(20, 18, 20, 18)
+            card_layout.setSpacing(5)
+
+            title_label = QLabel(title)
+            title_label.setObjectName("dashboardCardTitle")
+
+            value_label = QLabel(value)
+            value_label.setObjectName("dashboardCardValue")
+
+            description_label = QLabel(description)
+            description_label.setObjectName(
+                "dashboardCardDescription"
+            )
+
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
+            card_layout.addWidget(description_label)
+            card_layout.addStretch()
+
+            cards_layout.addWidget(card, 0, column)
+
+        layout.addLayout(cards_layout)
+
+        # ── Lower Section ───────────────────────────────
+        lower_layout = QHBoxLayout()
+        lower_layout.setSpacing(15)
+
+        today_card = QFrame()
+        today_card.setObjectName("dashboardSectionCard")
+
+        today_layout = QVBoxLayout(today_card)
+        today_layout.setContentsMargins(20, 18, 20, 18)
+
+        today_title = QLabel("Today's Classes")
+        today_title.setObjectName("dashboardSectionTitle")
+
+        today_info = QLabel(
+            "No classes scheduled for today."
+        )
+        today_info.setObjectName("dashboardSectionText")
+
+        today_layout.addWidget(today_title)
+        today_layout.addSpacing(10)
+        today_layout.addWidget(today_info)
+        today_layout.addStretch()
+
+        alerts_card = QFrame()
+        alerts_card.setObjectName("dashboardSectionCard")
+
+        alerts_layout = QVBoxLayout(alerts_card)
+        alerts_layout.setContentsMargins(20, 18, 20, 18)
+
+        alerts_title = QLabel("Alerts & Notifications")
+        alerts_title.setObjectName("dashboardSectionTitle")
+
+        alerts_info = QLabel(
+            "No alerts at the moment."
+        )
+        alerts_info.setObjectName("dashboardSectionText")
+
+        alerts_layout.addWidget(alerts_title)
+        alerts_layout.addSpacing(10)
+        alerts_layout.addWidget(alerts_info)
+        alerts_layout.addStretch()
+
+        lower_layout.addWidget(today_card, 1)
+        lower_layout.addWidget(alerts_card, 1)
+
+        layout.addLayout(lower_layout)
+
+        return page
+
+
+        

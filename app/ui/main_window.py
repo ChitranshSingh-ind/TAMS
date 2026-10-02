@@ -1,7 +1,9 @@
+from datetime import date
 from app.ui.settings_dialog import SettingsDialog
 from PyQt6.QtCore import Qt
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
+from app.services.student_service import count_students
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -15,7 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QGridLayout,
 )
-
+from app.services.attendance_service import count_present_students
 NAVY = "#012D54"
 DARK_NAVY = "#04294D"
 GOLD = "#D9B85F"
@@ -343,6 +345,7 @@ class MainWindow(QMainWindow):
         self.batch_selector.clear()
 
         self.batch_selector.addItem("All Batches", None)
+        self.batch_selector.currentIndexChanged.connect(self.refresh_dashboard)
         with SessionLocal() as session:
             batches = get_active_batches(session)
             for batch in batches:
@@ -350,8 +353,10 @@ class MainWindow(QMainWindow):
                     batch.name, 
                     batch.id
                 )
+
                 
         self.pages.setCurrentIndex(0)
+        self.refresh_dashboard()
 
     def create_dashboard_page(self):
         page = QWidget()
@@ -403,6 +408,10 @@ class MainWindow(QMainWindow):
 
             value_label = QLabel(value)
             value_label.setObjectName("dashboardCardValue")
+            if title == "Students":
+                self.students_count_label = value_label
+            if title == "Attendance":
+                self.attendance_count_label = value_label
 
             description_label = QLabel(description)
             description_label.setObjectName(
@@ -466,6 +475,28 @@ class MainWindow(QMainWindow):
         layout.addLayout(lower_layout)
 
         return page
+    def refresh_dashboard(self):
+        batch_id = self.batch_selector.currentData()
+
+        with SessionLocal() as session:
+            student_count = count_students(
+                session,
+                batch_id=batch_id,
+            )
+            present_count = count_present_students(
+                session,
+                attendance_date=date.today(),
+                batch_id=batch_id
+                )
+            self.students_count_label.setText(str(student_count))
+
+            if student_count == 0:
+                self.attendance_count_label.setText("-")
+            else:
+                self.attendance_count_label.setText(f"{present_count}/{student_count}")
+            
+
+        self.students_count_label.setText(str(student_count))
 
 
-        
+            

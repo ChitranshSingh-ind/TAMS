@@ -5,6 +5,7 @@ from app.database.models.attendance import Attendance
 from app.database.models.fee import Fee
 from app.database.models.fee_payment import FeePayment
 from app.database.models.test import TestModel
+from app.database.models.lesson import Lesson
 
 __all__ = [
     "Batch",
@@ -14,4 +15,5 @@ __all__ = [
     "Fee",
     "FeePayment",
     "TestModel",
+    "Lesson",
 ]

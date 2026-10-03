@@ -3,9 +3,11 @@ from app.ui.settings_dialog import SettingsDialog
 from PyQt6.QtCore import Qt
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
-from app.services.student_service import count_students
+from app.services.student_service import count_students,  get_students_by_batch
 from app.services.fee_service import get_outstanding_amount
 from app.services.test_service import count_upcoming_tests
+from app.services.lesson_service import get_lessons_for_date
+from app.services.dashboard_service import get_dashboard_alerts
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -18,6 +20,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QGridLayout,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
 )
 from app.services.attendance_service import count_present_students
 NAVY = "#012D54"
@@ -155,10 +160,16 @@ class MainWindow(QMainWindow):
         sidebar_layout.addStretch()
         
         self.pages.addWidget(self.create_dashboard_page())
-        # Placeholder pages
+
+# Application pages
         for name, index in menu_items:
             if index == 0:
                 continue
+
+            if index == 1:
+                self.pages.addWidget(self.create_students_page())
+                continue
+
             page = QWidget()
             layout = QVBoxLayout(page)
 
@@ -168,7 +179,7 @@ class MainWindow(QMainWindow):
 
             layout.addWidget(label)
 
-            self.pages.addWidget(page)
+        self.pages.addWidget(page)
         workspace_layout.addWidget(self.pages)
         content_layout.addLayout(workspace_layout)
 
@@ -335,9 +346,97 @@ class MainWindow(QMainWindow):
         color: #615F4B;
         font-size: 13px;
     }}
+    #studentsPage {{
+    background: #F8F6EA;
+}}
+
+#studentsPageTitle {{
+    color: #012D54;
+    font-size: 26px;
+    font-weight: 700;
+}}
+
+#studentsPageSubtitle {{
+    color: #615F4B;
+    font-size: 13px;
+}}
+#studentsPage {{
+    background: #F8F6EA;
+}}
+
+#studentsPageTitle {{
+    color: #012D54;
+    font-size: 26px;
+    font-weight: 700;
+}}
+
+#studentsPageSubtitle {{
+    color: #615F4B;
+    font-size: 13px;
+}}
+
+#addStudentButton {{
+    background: #012D54;
+    color: #FEFEFE;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+}}
+
+#addStudentButton:hover {{
+    background: #04294D;
+}}
+
+#addStudentButton:pressed {{
+    background: #001F3A;
+}}
+
+#studentsTableFrame {{
+    background: #FEFEFE;
+    border: 1px solid #E9DEBA;
+    border-radius: 12px;
+}}
+
+#studentsTablePlaceholder {{
+    color: #615F4B;
+    font-size: 14px;
+}}
+#studentsTable {{
+    background: #FEFEFE;
+    border: 1px solid #E9DEBA;
+    border-radius: 10px;
+    gridline-color: #E9DEBA;
+    color: #1F2937;
+    font-size: 13px;
+    selection-background-color: #E9DEBA;
+    selection-color: #012D54;
+}}
+
+#studentsTable::item {{
+    padding: 8px;
+    border-bottom: 1px solid #F1EBD3;
+}}
+
+#studentsTable QHeaderView::section {{
+    background: #012D54;
+    color: #FEFEFE;
+    padding: 10px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+}}
+
+#studentsTable QTableCornerButton::section {{
+    background: #012D54;
+    border: none;
+}}
         """)
     def change_page(self,index):
         self.pages.setCurrentIndex(index)
+        if index == 1:
+            self.load_students()
 
         for button in self.sidebar_buttons:
             button.setProperty("active", button.property("page_index") == index)
@@ -348,6 +447,7 @@ class MainWindow(QMainWindow):
 
         self.batch_selector.addItem("All Batches", None)
         self.batch_selector.currentIndexChanged.connect(self.refresh_dashboard)
+        self.batch_selector.currentIndexChanged.connect(self.load_students)
         with SessionLocal() as session:
             batches = get_active_batches(session)
             for batch in batches:
@@ -415,9 +515,10 @@ class MainWindow(QMainWindow):
             if title == "Attendance":
                 self.attendance_count_label = value_label
             if title == "Fees Pending":
-                self.fees_count_label = value_label
+                self.fees_pending_label = value_label
             if title == "Upcoming Tests":
                 self.upcoming_tests_label = value_label
+            
 
             description_label = QLabel(description)
             description_label.setObjectName(
@@ -446,10 +547,11 @@ class MainWindow(QMainWindow):
         today_title = QLabel("Today's Classes")
         today_title.setObjectName("dashboardSectionTitle")
 
-        today_info = QLabel(
-            "No classes scheduled for today."
-        )
+        today_info = QLabel()
+        today_info.setWordWrap(True)
         today_info.setObjectName("dashboardSectionText")
+
+        self.today_classes_label = today_info
 
         today_layout.addWidget(today_title)
         today_layout.addSpacing(10)
@@ -465,15 +567,18 @@ class MainWindow(QMainWindow):
         alerts_title = QLabel("Alerts & Notifications")
         alerts_title.setObjectName("dashboardSectionTitle")
 
-        alerts_info = QLabel(
-            "No alerts at the moment."
-        )
+        alerts_info = QLabel()
+        alerts_info.setWordWrap(True)
         alerts_info.setObjectName("dashboardSectionText")
+
+        self.alerts_label = alerts_info
 
         alerts_layout.addWidget(alerts_title)
         alerts_layout.addSpacing(10)
         alerts_layout.addWidget(alerts_info)
         alerts_layout.addStretch()
+
+        
 
         lower_layout.addWidget(today_card, 1)
         lower_layout.addWidget(alerts_card, 1)
@@ -481,6 +586,177 @@ class MainWindow(QMainWindow):
         layout.addLayout(lower_layout)
 
         return page
+    def create_students_page(self):
+        page = QWidget()
+        page.setObjectName("studentsPage")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 25, 30, 30)
+        layout.setSpacing(18)
+
+        # Header
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
+
+        title = QLabel("Students")
+        title.setObjectName("studentsPageTitle")
+
+        subtitle = QLabel(
+            "Manage your students and their information."
+        )
+        subtitle.setObjectName("studentsPageSubtitle")
+
+        title_box.addWidget(title)
+        title_box.addWidget(subtitle)
+
+        header_layout.addLayout(title_box)
+        header_layout.addStretch()
+
+        # Add student button
+        add_student_button = QPushButton("+ Add Student")
+        add_student_button.setObjectName("addStudentButton")
+        add_student_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+
+        header_layout.addWidget(add_student_button)
+
+        layout.addLayout(header_layout)
+
+        # Students table
+        self.students_table = QTableWidget()
+        self.students_table.setObjectName("studentsTable")
+
+        self.students_table.setColumnCount(6)
+        self.students_table.setHorizontalHeaderLabels([
+            "Admission No.",
+            "Student Name",
+            "Parent",
+            "Phone",
+            "Batch",
+            "Status",
+        ])
+
+        self.students_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+
+        self.students_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+
+        self.students_table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection
+        )
+
+        self.students_table.verticalHeader().setVisible(False)
+
+        header = self.students_table.horizontalHeader()
+
+        header.setSectionResizeMode(
+            0,
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            1,
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        header.setSectionResizeMode(
+            2,
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        header.setSectionResizeMode(
+            3,
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            4,
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            5,
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        self.students_table.setRowCount(0)
+
+        layout.addWidget(self.students_table, 1)
+
+        return page
+    def load_students(self):
+        batch_id = self.batch_selector.currentData()
+
+        with SessionLocal() as session:
+            students = get_students_by_batch(
+                session,
+                batch_id=batch_id,
+            )
+
+            self.students_table.setRowCount(len(students))
+
+            for row, student in enumerate(students):
+                parent_name = ""
+                parent_phone = ""
+
+                if student.parent:
+                    parent_name = student.parent.name or ""
+                    parent_phone = (
+                        student.parent.whatsapp_number
+                        or student.parent.phone
+                        or ""
+                    )
+
+                batch_name = ""
+                if student.batch:
+                    batch_name = student.batch.name
+
+                self.students_table.setItem(
+                    row,
+                    0,
+                    QTableWidgetItem(
+                        student.admission_number or ""
+                    ),
+                )
+
+                self.students_table.setItem(
+                    row,
+                    1,
+                    QTableWidgetItem(
+                        f"{student.first_name} {student.last_name or ''}".strip()
+                    ),
+                )
+
+                self.students_table.setItem(
+                    row,
+                    2,
+                    QTableWidgetItem(parent_name),
+                )
+
+                self.students_table.setItem(
+                    row,
+                    3,
+                    QTableWidgetItem(parent_phone),
+                )
+
+                self.students_table.setItem(
+                    row,
+                    4,
+                    QTableWidgetItem(batch_name),
+                )
+
+                self.students_table.setItem(
+                    row,
+                    5,
+                    QTableWidgetItem(student.status),
+                )
     def refresh_dashboard(self):
         batch_id = self.batch_selector.currentData()
 
@@ -502,7 +778,16 @@ class MainWindow(QMainWindow):
                 session,
                 batch_id = batch_id,
                     )
-            self.students_count_label.setText(str(student_count))
+            today_lessons = get_lessons_for_date(
+                session,
+                lesson_date=date.today(),
+                batch_id=batch_id,
+            )
+            dashboard_alerts = get_dashboard_alerts(
+                session,
+                batch_id=batch_id
+            )
+            
 
             if student_count == 0:
                 self.attendance_count_label.setText("-")
@@ -512,10 +797,42 @@ class MainWindow(QMainWindow):
 
                 self.fees_pending_label.setText(f"{outstanding_amount:,.0f}")
                 self.upcoming_tests_label.setText(str(upcoming_test_count))
-            
-            
+            if not today_lessons:
+                self.today_classes_label.setText(
+                    "No classes scheduled for today."
+                )
+            else:
+                class_lines = []
 
-        self.students_count_label.setText(str(student_count))
+                for lesson in today_lessons:
+                    line = lesson.title
+
+                    if lesson.chapter:
+                        line += f"\nChapter: {lesson.chapter}"
+
+                    if lesson.topic:
+                        line += f"\nTopic: {lesson.topic}"
+
+                    class_lines.append(line)
+
+                self.today_classes_label.setText(
+                    "\n\n".join(class_lines)
+                )
+            if not dashboard_alerts:
+                self.alerts_label.setText(
+                    "No alerts at the moment."
+                )
+            else:
+                self.alerts_label.setText(
+                    "\n".join(
+                        f"• {alert}"
+                        for alert in dashboard_alerts
+                    )
+                )
+                        
+                        
+
+            self.students_count_label.setText(str(student_count))
 
 
-            
+                        

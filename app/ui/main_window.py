@@ -4,6 +4,8 @@ from PyQt6.QtCore import Qt
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
 from app.services.student_service import count_students
+from app.services.fee_service import get_outstanding_amount
+from app.services.test_service import count_upcoming_tests
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -412,6 +414,10 @@ class MainWindow(QMainWindow):
                 self.students_count_label = value_label
             if title == "Attendance":
                 self.attendance_count_label = value_label
+            if title == "Fees Pending":
+                self.fees_count_label = value_label
+            if title == "Upcoming Tests":
+                self.upcoming_tests_label = value_label
 
             description_label = QLabel(description)
             description_label.setObjectName(
@@ -488,12 +494,25 @@ class MainWindow(QMainWindow):
                 attendance_date=date.today(),
                 batch_id=batch_id
                 )
+            outstanding_amount = get_outstanding_amount(
+                            session,
+                            batch_id=batch_id
+                        )
+            upcoming_test_count = count_upcoming_tests(
+                session,
+                batch_id = batch_id,
+                    )
             self.students_count_label.setText(str(student_count))
 
             if student_count == 0:
                 self.attendance_count_label.setText("-")
             else:
                 self.attendance_count_label.setText(f"{present_count}/{student_count}")
+
+
+                self.fees_pending_label.setText(f"{outstanding_amount:,.0f}")
+                self.upcoming_tests_label.setText(str(upcoming_test_count))
+            
             
 
         self.students_count_label.setText(str(student_count))

@@ -1,7 +1,8 @@
-from sqlalchemy import select
+from sqlalchemy import select,func
 from sqlalchemy.orm import Session
 
 from app.database.models.fee import Fee
+from app.database.models.fee_payment import FeePayment
 
 
 def create_fee(
@@ -58,3 +59,45 @@ def get_fees_by_batch(
         )
 
     return list(session.scalars(statement).all())
+def get_outstanding_amount(
+    session: Session,
+    batch_id: int | None = None,
+) -> float:
+
+    statement = (
+        select(
+            func.coalesce(
+                func.sum(Fee.final_amount_due),
+                0,
+            )
+        )
+    )
+
+    if batch_id is not None:
+        statement = statement.where(
+            Fee.batch_id == batch_id
+        )
+
+    total_due = session.scalar(statement) or 0
+
+    payment_statement = (
+        select(
+            func.coalesce(
+                func.sum(FeePayment.amount),
+                0,
+            )
+        )
+        .join(
+            Fee,
+            Fee.id == FeePayment.fee_id,
+        )
+    )
+
+    if batch_id is not None:
+        payment_statement = payment_statement.where(
+            Fee.batch_id == batch_id
+        )
+
+    total_paid = session.scalar(payment_statement) or 0
+
+    return float(total_due - total_paid)

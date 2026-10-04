@@ -2,6 +2,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.database.models.student import Student
+from app.database.models.parent import Parent
 
 
 def create_student(
@@ -47,22 +48,29 @@ def get_student(
 
 def get_students_by_batch(
     session: Session,
-    batch_id: int,
+    batch_id: int | None = None,
     *,
     include_inactive: bool = False,
 ) -> list[Student]:
 
-    statement = (
-        select(Student)
-        .where(Student.batch_id == batch_id)
-        .order_by(Student.first_name, Student.last_name)
-    )
+    statement = select(Student)
+
+    if batch_id is not None:
+        statement = statement.where(
+            Student.batch_id == batch_id
+        )
 
     if not include_inactive:
-        statement = statement.where(Student.status == "ACTIVE")
+        statement = statement.where(
+            Student.status == "ACTIVE"
+        )
+
+    statement = statement.order_by(
+        Student.first_name,
+        Student.last_name,
+    )
 
     return list(session.scalars(statement).all())
-
 
 def count_students(session: Session, batch_id: int | None = None) -> int:
     statement = (select(func.count(Student.id)).where(Student.status == "ACTIVE"))
@@ -120,6 +128,63 @@ def archive_student(
 
     student.status = "INACTIVE"
 
+    session.commit()
+    session.refresh(student)
+
+    return student
+def create_student_with_parent(
+    session: Session,
+    admission_number: str | None,
+    first_name: str,
+    last_name: str | None,
+    parent_name: str,
+    parent_phone: str | None,
+    whatsapp_number: str | None,
+    batch_id: int,
+    date_of_birth,
+    school_name: str | None,
+    admission_date,
+    status: str,
+    notes: str | None,
+) -> Student:
+    # Check duplicate admission number
+    if admission_number:
+        existing_student = session.scalar(
+            select(Student).where(
+                Student.admission_number == admission_number
+            )
+        )
+
+        if existing_student:
+            raise ValueError(
+                "A student with this admission number already exists."
+            )
+
+    # Create parent
+    parent = Parent(
+        name=parent_name,
+        phone=parent_phone,
+        whatsapp_number=whatsapp_number,
+    )
+
+    session.add(parent)
+    session.flush()
+
+    # Create student
+    student = Student(
+        admission_number=admission_number,
+        first_name=first_name,
+        last_name=last_name,
+        parent_id=parent.id,
+        batch_id=batch_id,
+        date_of_birth=date_of_birth,
+        school_name=school_name,
+        admission_date=admission_date,
+        status=status,
+        notes=notes,
+    )
+
+    session.add(student)
     session.commit()
     session.refresh(student)
 

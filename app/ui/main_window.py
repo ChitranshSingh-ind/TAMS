@@ -1,9 +1,10 @@
 from datetime import date
 from app.ui.settings_dialog import SettingsDialog
-from PyQt6.QtCore import Qt
+from app.ui.add_student_dialog import AddStudentDialog
+from PyQt6.QtCore import Qt, QDate
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
-from app.services.student_service import count_students,  get_students_by_batch
+from app.services.student_service import count_students,  get_students_by_batch, create_student_with_parent, get_student, update_student
 from app.services.fee_service import get_outstanding_amount
 from app.services.test_service import count_upcoming_tests
 from app.services.lesson_service import get_lessons_for_date
@@ -23,6 +24,10 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QDialog,
+    QMessageBox,
+    QTabWidget,
+    
 )
 from app.services.attendance_service import count_present_students
 NAVY = "#012D54"
@@ -432,6 +437,73 @@ class MainWindow(QMainWindow):
     background: #012D54;
     border: none;
 }}
+#addStudentTitle {{
+    color: {NAVY};
+    font-size: 22px;
+    font-weight: 700;
+}}
+
+#addStudentSubtitle {{
+    color: {DARK_NAVY};
+    font-size: 13px;
+}}
+
+QDialog {{
+    background: #F8F6EA;
+}}
+
+QDialog QLineEdit,
+QDialog QComboBox,
+QDialog QDateEdit,
+QDialog QPlainTextEdit {{
+    background: #FEFEFE;
+    color: #1F2937;
+    border: 1px solid #D9B85F;
+    border-radius: 6px;
+    padding: 7px 9px;
+}}
+
+QDialog QLineEdit:focus,
+QDialog QComboBox:focus,
+QDialog QDateEdit:focus,
+QDialog QPlainTextEdit:focus {{
+    border: 2px solid #012D54;
+}}
+
+QDialog QDialogButtonBox QPushButton {{
+    background: #012D54;
+    color: #FEFEFE;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-weight: 600;
+}}
+
+QDialog QDialogButtonBox QPushButton:hover {{
+    background: #04294D;
+}}
+QDialog QLabel{{
+    color: {NAVY};
+}}
+#editStudentButton {{
+    background: #E9DEBA;
+    color: #012D54;
+    border: 1px solid #D9B85F;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+}}
+
+#editStudentButton:hover {{
+    background: #D9B85F;
+    color: #012D54;
+}}
+
+#editStudentButton:pressed {{
+    background: #C5A64D;
+    color: #012D54;
+}}
         """)
     def change_page(self,index):
         self.pages.setCurrentIndex(index)
@@ -621,6 +693,7 @@ class MainWindow(QMainWindow):
         add_student_button.setCursor(
             Qt.CursorShape.PointingHandCursor
         )
+        add_student_button.clicked.connect(self.open_add_student_dialog)
 
         header_layout.addWidget(add_student_button)
 
@@ -629,8 +702,17 @@ class MainWindow(QMainWindow):
         # Students table
         self.students_table = QTableWidget()
         self.students_table.setObjectName("studentsTable")
+        self.students_table.setVerticalScrollBarPolicy(
+        Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    )
 
-        self.students_table.setColumnCount(6)
+        self.students_table.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.students_table.setMinimumHeight(300)
+        self.students_table.verticalHeader().setDefaultSectionSize(55)
+
+        self.students_table.setColumnCount(7)
         self.students_table.setHorizontalHeaderLabels([
             "Admission No.",
             "Student Name",
@@ -638,6 +720,7 @@ class MainWindow(QMainWindow):
             "Phone",
             "Batch",
             "Status",
+            "Action",
         ])
 
         self.students_table.setEditTriggers(
@@ -685,6 +768,11 @@ class MainWindow(QMainWindow):
             5,
             QHeaderView.ResizeMode.ResizeToContents
         )
+        header.setSectionResizeMode(
+            6,
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+        
 
         self.students_table.setRowCount(0)
 
@@ -757,6 +845,89 @@ class MainWindow(QMainWindow):
                     5,
                     QTableWidgetItem(student.status),
                 )
+                # Action buttons
+                action_widget = QWidget()
+                action_layout = QHBoxLayout(action_widget)
+
+                action_layout.setContentsMargins(4, 2, 4, 2)
+                action_layout.setSpacing(5)
+
+                # View button
+                view_button = QPushButton("View")
+                view_button.setFixedSize(65, 28)
+                view_button.setCursor(
+                    Qt.CursorShape.PointingHandCursor
+                )
+
+                view_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #012D54;
+                        color: #FEFEFE;
+                        border: 1px solid #012D54;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+
+                    QPushButton:hover {
+                        background-color: #04294D;
+                    }
+
+                    QPushButton:pressed {
+                        background-color: #001F3A;
+                    }
+                """)
+
+                view_button.clicked.connect(
+                    lambda checked=False, student_id=student.id:
+                        self.view_student(student_id)
+                )
+
+                # Edit button
+                edit_button = QPushButton("Edit")
+                edit_button.setFixedSize(65, 28)
+                edit_button.setCursor(
+                    Qt.CursorShape.PointingHandCursor
+                )
+
+                edit_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E9DEBA;
+                        color: #012D54;
+                        border: 1px solid #D9B85F;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+
+                    QPushButton:hover {
+                        background-color: #D9B85F;
+                        color: #012D54;
+                    }
+
+                    QPushButton:pressed {
+                        background-color: #C5A64D;
+                        color: #012D54;
+                    }
+                """)
+
+                edit_button.clicked.connect(
+                    lambda checked=False, student_id=student.id:
+                        self.edit_student(student_id)
+                )
+
+                action_layout.addWidget(view_button)
+                action_layout.addWidget(edit_button)
+
+                self.students_table.setCellWidget(
+                    row,
+                    6,
+                    action_widget,
+                )
+
+                
+
+                
     def refresh_dashboard(self):
         batch_id = self.batch_selector.currentData()
 
@@ -833,6 +1004,487 @@ class MainWindow(QMainWindow):
                         
 
             self.students_count_label.setText(str(student_count))
+    def open_add_student_dialog(self):
+        with SessionLocal() as session:
+            batches = get_active_batches(session)
 
+        dialog = AddStudentDialog(
+            batches=batches,
+            parent=self,
+        )
 
-                        
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        admission_number = (
+            dialog.admission_number_input.text().strip()
+            or None
+        )
+
+        first_name = (
+            dialog.first_name_input.text().strip()
+        )
+
+        last_name = (
+            dialog.last_name_input.text().strip()
+            or None
+        )
+
+        parent_name = (
+            dialog.parent_name_input.text().strip()
+        )
+
+        parent_phone = (
+            dialog.parent_phone_input.text().strip()
+            or None
+        )
+
+        whatsapp_number = (
+            dialog.whatsapp_input.text().strip()
+            or None
+        )
+
+        batch_id = dialog.batch_input.currentData()
+
+        school_name = (
+            dialog.school_input.text().strip()
+            or None
+        )
+
+        status = dialog.status_input.currentText()
+
+        notes = (
+            dialog.notes_input.toPlainText().strip()
+            or None
+        )
+
+        dob = dialog.date_of_birth_input.date()
+
+        if dob == dialog.date_of_birth_input.minimumDate():
+            date_of_birth = None
+        else:
+            date_of_birth = dob.toPyDate()
+        admission_date = (
+            dialog.admission_date_input.date().toPyDate()
+        )
+
+        if not first_name:
+            QMessageBox.warning(
+                self,
+                "Missing Information",
+                "Please enter the student's first name.",
+            )
+            return
+
+        if not parent_name:
+            QMessageBox.warning(
+                self,
+                "Missing Information",
+                "Please enter the parent's name.",
+            )
+            return
+
+        if batch_id is None:
+            QMessageBox.warning(
+                self,
+                "Missing Information",
+                "Please select a batch.",
+            )
+            return
+
+        try:
+            with SessionLocal() as session:
+                create_student_with_parent(
+                    session=session,
+                    admission_number=admission_number,
+                    first_name=first_name,
+                    last_name=last_name,
+                    parent_name=parent_name,
+                    parent_phone=parent_phone,
+                    whatsapp_number=whatsapp_number,
+                    batch_id=batch_id,
+                    date_of_birth=date_of_birth,
+                    school_name=school_name,
+                    admission_date=admission_date,
+                    status=status,
+                    notes=notes,
+                )
+
+            self.load_students()
+            self.refresh_dashboard()
+
+            QMessageBox.information(
+                self,
+                "Student Added",
+                "Student has been added successfully.",
+            )
+
+        except ValueError as error:
+            QMessageBox.warning(
+                self,
+                "Could Not Add Student",
+                str(error),
+            )
+    def edit_student(self, student_id):
+        with SessionLocal() as session:
+            student = get_student(session, student_id)
+
+            if student is None:
+                QMessageBox.warning(
+                    self,
+                    "Student Not Found",
+                    "The selected student could not be found.",
+                )
+                return
+
+            # Load active batches
+            batches = get_active_batches(session)
+
+            dialog = AddStudentDialog(
+                batches=batches,
+                parent=self,
+            )
+
+            # -----------------------------
+            # Fill existing student data
+            # -----------------------------
+
+            dialog.admission_number_input.setText(
+                student.admission_number or ""
+            )
+
+            dialog.first_name_input.setText(
+                student.first_name or ""
+            )
+
+            dialog.last_name_input.setText(
+                student.last_name or ""
+            )
+
+            if student.parent:
+                dialog.parent_name_input.setText(
+                    student.parent.name or ""
+                )
+
+                dialog.parent_phone_input.setText(
+                    student.parent.phone or ""
+                )
+
+                dialog.whatsapp_input.setText(
+                    student.parent.whatsapp_number or ""
+                )
+
+            # Select student's batch
+            if student.batch_id is not None:
+                batch_index = dialog.batch_input.findData(
+                    student.batch_id
+                )
+
+                if batch_index >= 0:
+                    dialog.batch_input.setCurrentIndex(
+                        batch_index
+                    )
+
+            # DOB
+            if student.date_of_birth:
+                dialog.date_of_birth_input.setDate(
+                    QDate(
+                        student.date_of_birth.year,
+                        student.date_of_birth.month,
+                        student.date_of_birth.day,
+                    )
+                )
+
+            # School
+            dialog.school_input.setText(
+                student.school_name or ""
+            )
+
+            # Admission date
+            if student.admission_date:
+                dialog.admission_date_input.setDate(
+                    QDate(
+                        student.admission_date.year,
+                        student.admission_date.month,
+                        student.admission_date.day,
+                    )
+                )
+
+            # Status
+            status_index = dialog.status_input.findText(
+                student.status
+            )
+
+            if status_index >= 0:
+                dialog.status_input.setCurrentIndex(
+                    status_index
+                )
+
+            # Notes
+            dialog.notes_input.setPlainText(
+                student.notes or ""
+            )
+
+            # -----------------------------
+            # Show dialog
+            # -----------------------------
+
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+
+        # Read updated values
+            admission_number = dialog.admission_number_input.text().strip() or None
+            first_name = dialog.first_name_input.text().strip()
+            last_name = dialog.last_name_input.text().strip()
+            parent_name = dialog.parent_name_input.text().strip()
+            parent_phone = dialog.parent_phone_input.text().strip()
+            whatsapp_number = dialog.whatsapp_input.text().strip()
+
+            batch_id = dialog.batch_input.currentData()
+
+            dob = dialog.date_of_birth_input.date()
+            if dob == dialog.date_of_birth_input.minimumDate():
+                date_of_birth = None
+            else:
+                date_of_birth = dob.toPyDate()
+
+            school_name = dialog.school_input.text().strip()
+
+            admission_date = dialog.admission_date_input.date().toPyDate()
+
+            status = dialog.status_input.currentText()
+
+            notes = dialog.notes_input.toPlainText().strip()
+
+            # Basic validation
+            if not first_name:
+                QMessageBox.warning(
+                    self,
+                    "Missing Information",
+                    "Please enter the student's first name.",
+                )
+                return
+
+            if not parent_name:
+                QMessageBox.warning(
+                    self,
+                    "Missing Information",
+                    "Please enter the parent's name.",
+                )
+                return
+
+            if batch_id is None:
+                QMessageBox.warning(
+                    self,
+                    "Missing Information",
+                    "Please select a batch.",
+                )
+                return
+
+            with SessionLocal() as session:
+                try:
+                    update_student(
+                        session,
+                        student_id,
+                        admission_number=admission_number,
+                        first_name=first_name,
+                        last_name=last_name,
+                        batch_id=batch_id,
+                        date_of_birth=date_of_birth,
+                        school_name=school_name,
+                        admission_date=admission_date,
+                        status=status,
+                        notes=notes,
+                    )
+
+                    # Update parent details
+                    student = get_student(session, student_id)
+
+                    if student and student.parent:
+                        student.parent.name = parent_name
+                        student.parent.phone = parent_phone or None
+                        student.parent.whatsapp_number = whatsapp_number or None
+                        session.commit()
+
+                    self.load_students()
+                    self.refresh_dashboard()
+
+                    QMessageBox.information(
+                        self,
+                        "Student Updated",
+                        "Student details have been updated successfully.",
+                    )
+
+                except ValueError as e:
+                    QMessageBox.warning(
+                        self,
+                        "Update Failed",
+                        str(e),
+                    )
+
+                except Exception as e:
+                    session.rollback()
+                    QMessageBox.critical(
+                        self,
+                        "Update Failed",
+                        f"Could not update the student.\n\n{e}",
+                    )
+    def view_student(self, student_id):
+        with SessionLocal() as session:
+            student = get_student(session, student_id)
+
+            if student is None:
+                QMessageBox.warning(
+                    self,
+                    "Student Not Found",
+                    "The selected student could not be found.",
+                )
+                return
+
+            # Student information
+            student_name = (
+                f"{student.first_name} {student.last_name or ''}"
+            ).strip()
+
+            admission_number = student.admission_number or "Not provided"
+            school_name = student.school_name or "Not provided"
+            status = student.status or "Not provided"
+            notes = student.notes or "No notes"
+
+            # Batch
+            batch_name = "Not assigned"
+            if student.batch:
+                batch_name = student.batch.name
+
+            # Parent information
+            parent_name = "Not provided"
+            parent_phone = "Not provided"
+            whatsapp_number = "Not provided"
+
+            if student.parent:
+                parent_name = student.parent.name or "Not provided"
+                parent_phone = student.parent.phone or "Not provided"
+                whatsapp_number = (
+                    student.parent.whatsapp_number
+                    or "Not provided"
+                )
+
+            # Dates
+            date_of_birth = "Not provided"
+            if student.date_of_birth:
+                date_of_birth = student.date_of_birth.strftime(
+                    "%d/%m/%Y"
+                )
+
+            admission_date = "Not provided"
+            if student.admission_date:
+                admission_date = student.admission_date.strftime(
+                    "%d/%m/%Y"
+                )
+
+            # Create dialog
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Student Profile")
+            dialog.resize(600, 550)
+
+            layout = QVBoxLayout(dialog)
+            layout.setContentsMargins(25, 25, 25, 25)
+            layout.setSpacing(15)
+
+            # Title
+            title = QLabel(student_name)
+            title.setObjectName("studentProfileTitle")
+
+            subtitle = QLabel(
+                f"Admission No. • {admission_number}"
+            )
+            subtitle.setObjectName("studentProfileSubtitle")
+
+            layout.addWidget(title)
+            layout.addWidget(subtitle)
+
+            # Student details
+            details = QLabel(
+                f"""
+                <b>Student Information</b><br><br>
+
+                <b>School:</b> {school_name}<br>
+                <b>Batch:</b> {batch_name}<br>
+                <b>Status:</b> {status}<br>
+                <b>Date of Birth:</b> {date_of_birth}<br>
+                <b>Admission Date:</b> {admission_date}<br><br>
+
+                <b>Parent / Guardian</b><br><br>
+
+                <b>Name:</b> {parent_name}<br>
+                <b>Phone:</b> {parent_phone}<br>
+                <b>WhatsApp:</b> {whatsapp_number}<br><br>
+
+                <b>Notes</b><br><br>
+                {notes}
+                """
+            )
+
+            details.setWordWrap(True)
+            details.setTextFormat(
+                Qt.TextFormat.RichText
+            )
+
+            layout.addWidget(details)
+            layout.addStretch()
+
+            # Close button
+            close_button = QPushButton("Close")
+            close_button.setFixedWidth(100)
+            close_button.setCursor(
+                Qt.CursorShape.PointingHandCursor
+            )
+
+            close_button.clicked.connect(dialog.accept)
+
+            layout.addWidget(
+                close_button,
+                alignment=Qt.AlignmentFlag.AlignRight,
+            )
+
+            dialog.setStyleSheet("""
+                QDialog {
+                    background: #F8F6EA;
+                }
+
+                #studentProfileTitle {
+                    color: #012D54;
+                    font-size: 24px;
+                    font-weight: 700;
+                }
+
+                #studentProfileSubtitle {
+                    color: #615F4B;
+                    font-size: 13px;
+                }
+
+                QLabel {
+                    color: #1F2937;
+                    font-size: 13px;
+                }
+
+                QPushButton {
+                    background: #012D54;
+                    color: #FEFEFE;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 20px;
+                    font-weight: 600;
+                }
+
+                QPushButton:hover {
+                    background: #04294D;
+                }
+
+                QPushButton:pressed {
+                    background: #001F3A;
+                }
+            """)
+
+            dialog.exec()
+                                            

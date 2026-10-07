@@ -16,21 +16,34 @@ def mark_attendance(
     remarks: str | None = None,
 ) -> Attendance:
 
-    attendance = Attendance(
-        student_id=student_id,
-        batch_id=batch_id,
-        date=attendance_date,
-        status=status,
-        remarks=remarks,
+    statement = (
+        select(Attendance)
+        .where(
+            Attendance.student_id == student_id,
+            Attendance.batch_id == batch_id,
+            Attendance.date == attendance_date,
+        )
     )
 
-    session.add(attendance)
+    attendance = session.scalar(statement)
+
+    if attendance is None:
+        attendance = Attendance(
+            student_id=student_id,
+            batch_id=batch_id,
+            date=attendance_date,
+            status=status,
+            remarks=remarks,
+        )
+        session.add(attendance)
+    else:
+        attendance.status = status
+        attendance.remarks = remarks
+
     session.commit()
     session.refresh(attendance)
 
     return attendance
-
-
 def get_attendance_by_date(
     session: Session,
     attendance_date: date,

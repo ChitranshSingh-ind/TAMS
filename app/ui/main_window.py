@@ -9,7 +9,7 @@ from app.services.fee_service import get_outstanding_amount, get_student_fee_sum
 from app.services.test_service import count_upcoming_tests, get_student_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
-from app.services.attendance_service import count_present_students, get_student_attendance
+from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
     QDialog,
     QMessageBox,
     QTabWidget,
+    QDateEdit,
     
 )
 
@@ -176,7 +177,7 @@ class MainWindow(QMainWindow):
                 self.pages.addWidget(self.create_students_page())
                 continue
             if index == 2:
-                self.pages.addWidget(self.create_attendancce_page())
+                self.pages.addWidget(self.create_attendance_page())
                 continue
 
             page = QWidget()
@@ -513,6 +514,8 @@ QDialog QLabel{{
         self.pages.setCurrentIndex(index)
         if index == 1:
             self.load_students()
+        if index == 2:
+            self.load_attendance_students()
 
         for button in self.sidebar_buttons:
             button.setProperty("active", button.property("page_index") == index)
@@ -524,6 +527,9 @@ QDialog QLabel{{
         self.batch_selector.addItem("All Batches", None)
         self.batch_selector.currentIndexChanged.connect(self.refresh_dashboard)
         self.batch_selector.currentIndexChanged.connect(self.load_students)
+        self.batch_selector.currentIndexChanged.connect(
+    self.load_attendance_students
+)
         with SessionLocal() as session:
             batches = get_active_batches(session)
             for batch in batches:
@@ -1721,6 +1727,7 @@ QDialog QLabel{{
             attendance_layout.addWidget(attendance_title)
 
             attendance_table = QTableWidget()
+            
             attendance_table.setColumnCount(2)
 
             attendance_table.setHorizontalHeaderLabels([
@@ -2152,3 +2159,411 @@ QDialog QLabel{{
         outstanding_label.setText(
             f"₹{summary['outstanding']:,.2f}"
         )
+    def create_attendance_page(self):
+        page = QWidget()
+        page.setObjectName("attendancePage")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 25, 30, 30)
+        layout.setSpacing(18)
+
+        # Header
+        title = QLabel("Attendance")
+        title.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                font-size: 26px;
+                font-weight: 700;
+                background: transparent;
+            }
+        """)
+
+        subtitle = QLabel(
+            "Mark attendance for the selected batch."
+        )
+        subtitle.setStyleSheet("""
+            QLabel {
+                color: #615F4B;
+                font-size: 13px;
+                background: transparent;
+            }
+        """)
+
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+
+        # Date
+        date_layout = QHBoxLayout()
+        date_layout.setSpacing(10)
+
+        date_label = QLabel("Date")
+        date_label.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                font-size: 13px;
+                font-weight: 600;
+            }
+        """)
+
+        date_picker = QDateEdit()
+        self.attendance_date_picker = date_picker
+        date_picker.setDate(QDate.currentDate())
+        date_picker.setCalendarPopup(True)
+        date_picker.setFixedWidth(150)
+
+        date_picker.setStyleSheet("""
+            QDateEdit {
+                background-color: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #E9DEBA;
+                border-radius: 6px;
+                padding: 7px 10px;
+                font-size: 13px;
+            }
+        """)
+
+        date_layout.addWidget(date_label)
+        date_layout.addWidget(date_picker)
+        date_layout.addStretch()
+
+        layout.addLayout(date_layout)
+
+        # Attendance table
+        attendance_table = QTableWidget()
+        self.attendance_table = attendance_table
+        attendance_table.setColumnCount(4)
+
+        attendance_table.setHorizontalHeaderLabels([
+            "Admission No.",
+            "Student Name",
+            "A",
+            "P",
+        ])
+
+        attendance_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+
+        attendance_table.setSelectionMode(
+            QTableWidget.SelectionMode.NoSelection
+        )
+
+        attendance_table.verticalHeader().setVisible(False)
+        attendance_table.verticalHeader().setDefaultSectionSize(48)
+
+        header = attendance_table.horizontalHeader()
+
+        header.setSectionResizeMode(
+            0,
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        header.setSectionResizeMode(
+            1,
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        header.setSectionResizeMode(
+            2,
+            QHeaderView.ResizeMode.Fixed
+        )
+
+        header.setSectionResizeMode(
+            3,
+            QHeaderView.ResizeMode.Fixed
+        )
+
+        attendance_table.setColumnWidth(2, 70)
+        attendance_table.setColumnWidth(3, 70)
+
+        attendance_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #FEFEFE;
+                color: #1F2937;
+                border: 1px solid #E9DEBA;
+                border-radius: 8px;
+                gridline-color: #E9DEBA;
+                font-size: 13px;
+            }
+
+            QTableWidget::item {
+                padding: 8px;
+            }
+
+            QHeaderView::section {
+                background-color: #012D54;
+                color: #FEFEFE;
+                padding: 10px;
+                border: none;
+                font-weight: 600;
+            }
+        """)
+
+        layout.addWidget(attendance_table)
+                # Load students for selected batch
+        # Save button
+        save_button = QPushButton("Save Attendance")
+        save_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_button.setFixedHeight(42)
+
+        save_button.setStyleSheet("""
+            QPushButton {
+                background-color: #012D54;
+                color: #FEFEFE;
+                border: none;
+                border-radius: 7px;
+                padding: 8px 20px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+
+            QPushButton:hover {
+                background-color: #04294D;
+            }
+        """)
+        save_button.clicked.connect(self.save_attendance)
+
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(save_button)
+
+        layout.addLayout(button_layout)
+
+        return page
+    def load_attendance_students(self):
+        selected_batch_id = self.batch_selector.currentData()
+
+        attendance_date = (
+            self.attendance_date_picker.date().toPyDate()
+        )
+
+        with SessionLocal() as session:
+            students = get_students_by_batch(
+                session,
+                batch_id=selected_batch_id,
+            )
+
+            existing_attendance = get_attendance_by_date(
+                session,
+                attendance_date,
+                batch_id=selected_batch_id,
+            )
+
+        self.attendance_table.setRowCount(0)
+
+        existing_status = {
+            attendance.student_id: attendance.status
+            for attendance in existing_attendance
+        }
+
+        self.attendance_status = {}
+
+        for row, student in enumerate(students):
+            self.attendance_table.insertRow(row)
+            self.attendance_status[student.id] = existing_status.get(
+                student.id
+            )
+
+            admission_item = QTableWidgetItem(
+                student.admission_number or "-"
+            )
+
+            name_item = QTableWidgetItem(
+                f"{student.first_name} {student.last_name or ''}".strip()
+            )
+
+            self.attendance_table.setItem(
+                row,
+                0,
+                admission_item
+            )
+
+            self.attendance_table.setItem(
+                row,
+                1,
+                name_item
+            )
+
+            # -----------------------------
+            # Absent button
+            # -----------------------------
+            absent_button = QPushButton("A")
+            absent_button.setCursor(
+                Qt.CursorShape.PointingHandCursor
+            )
+            absent_button.setFixedSize(42, 32)
+
+            # -----------------------------
+            # Present button
+            # -----------------------------
+            present_button = QPushButton("P")
+            present_button.setCursor(
+                Qt.CursorShape.PointingHandCursor
+            )
+            present_button.setFixedSize(42, 32)
+
+            def update_attendance_buttons(
+                selected_status,
+                absent_button=absent_button,
+                present_button=present_button,
+            ):
+                normal_style = """
+                    QPushButton {
+                        background-color: #FEFEFE;
+                        color: #012D54;
+                        border: 1px solid #E9DEBA;
+                        border-radius: 6px;
+                        font-weight: 700;
+                    }
+
+                    QPushButton:hover {
+                        background-color: #E9DEBA;
+                    }
+                """
+
+                absent_style = """
+                    QPushButton {
+                        background-color: #DC2626;
+                        color: #FEFEFE;
+                        border: 1px solid #DC2626;
+                        border-radius: 6px;
+                        font-weight: 700;
+                    }
+                """
+
+                present_style = """
+                    QPushButton {
+                        background-color: #16A34A;
+                        color: #FEFEFE;
+                        border: 1px solid #16A34A;
+                        border-radius: 6px;
+                        font-weight: 700;
+                    }
+                """
+
+                absent_button.setStyleSheet(
+                    absent_style
+                    if selected_status == "ABSENT"
+                    else normal_style
+                )
+
+                present_button.setStyleSheet(
+                    present_style
+                    if selected_status == "PRESENT"
+                    else normal_style
+                )
+
+            absent_button.clicked.connect(
+                lambda checked=False,
+                    student_id=student.id,
+                    update_buttons=update_attendance_buttons:
+                    (
+                        self.attendance_status.__setitem__(
+                            student_id,
+                            "ABSENT"
+                        ),
+                        update_buttons("ABSENT")
+                    )
+            )
+
+            present_button.clicked.connect(
+                lambda checked=False,
+                    student_id=student.id,
+                    update_buttons=update_attendance_buttons:
+                    (
+                        self.attendance_status.__setitem__(
+                            student_id,
+                            "PRESENT"
+                        ),
+                        update_buttons("PRESENT")
+                    )
+            )
+            if self.attendance_status[student.id] is not None:
+                update_attendance_buttons(
+                    self.attendance_status[student.id]
+                )
+
+            # A button container
+            absent_widget = QWidget()
+            absent_layout = QHBoxLayout(absent_widget)
+            absent_layout.setContentsMargins(0, 0, 0, 0)
+            absent_layout.setAlignment(
+                Qt.AlignmentFlag.AlignCenter
+            )
+            absent_layout.addWidget(absent_button)
+
+            # P button container
+            present_widget = QWidget()
+            present_layout = QHBoxLayout(present_widget)
+            present_layout.setContentsMargins(0, 0, 0, 0)
+            present_layout.setAlignment(
+                Qt.AlignmentFlag.AlignCenter
+            )
+            present_layout.addWidget(present_button)
+
+            self.attendance_table.setCellWidget(
+                row,
+                2,
+                absent_widget
+            )
+
+            self.attendance_table.setCellWidget(
+                row,
+                3,
+                present_widget
+            )
+    def save_attendance(self):
+        batch_id = self.batch_selector.currentData()
+
+        if batch_id is None:
+            QMessageBox.warning(
+                self,
+                "Select Batch",
+                "Please select a specific batch before saving attendance."
+            )
+            return
+
+        attendance_date = (
+            self.attendance_date_picker.date().toPyDate()
+        )
+
+        if not hasattr(self, "attendance_status"):
+            QMessageBox.warning(
+                self,
+                "Attendance",
+                "Attendance data is not ready."
+            )
+            return
+
+        unmarked_students = [
+            student_id
+            for student_id, status in self.attendance_status.items()
+            if status is None
+        ]
+
+        if unmarked_students:
+            QMessageBox.warning(
+                self,
+                "Incomplete Attendance",
+                "Please mark attendance for all students before saving."
+            )
+            return
+
+        with SessionLocal() as session:
+            for student_id, status in self.attendance_status.items():
+                mark_attendance(
+                    session,
+                    student_id=student_id,
+                    batch_id=batch_id,
+                    attendance_date=attendance_date,
+                    status=status,
+                )
+
+        QMessageBox.information(
+            self,
+            "Attendance Saved",
+            f"Attendance for {attendance_date.strftime('%d %B %Y')} "
+            "has been saved successfully."
+        )
+
+        self.refresh_dashboard()

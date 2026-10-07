@@ -101,3 +101,58 @@ def get_outstanding_amount(
     total_paid = session.scalar(payment_statement) or 0
 
     return float(total_due - total_paid)
+def get_student_fees(
+    session: Session,
+    student_id: int,
+) -> list[Fee]:
+
+    statement = (
+        select(Fee)
+        .where(Fee.student_id == student_id)
+        .order_by(
+            Fee.academic_year.desc(),
+            Fee.fee_month.desc(),
+        )
+    )
+
+    return list(session.scalars(statement).all())
+def get_student_fee_summary(
+    session: Session,
+    student_id: int,
+) -> dict[str, float]:
+
+    total_due_statement = (
+        select(
+            func.coalesce(
+                func.sum(Fee.final_amount_due),
+                0,
+            )
+        )
+        .where(Fee.student_id == student_id)
+    )
+
+    total_due = session.scalar(total_due_statement) or 0
+
+    total_paid_statement = (
+        select(
+            func.coalesce(
+                func.sum(FeePayment.amount),
+                0,
+            )
+        )
+        .join(
+            Fee,
+            Fee.id == FeePayment.fee_id,
+        )
+        .where(Fee.student_id == student_id)
+    )
+
+    total_paid = session.scalar(total_paid_statement) or 0
+
+    outstanding = total_due - total_paid
+
+    return {
+        "total_due": float(total_due),
+        "total_paid": float(total_paid),
+        "outstanding": float(outstanding),
+    }

@@ -5,7 +5,7 @@ from PyQt6.QtCore import Qt, QDate
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
 from app.services.student_service import count_students,  get_students_by_batch, create_student_with_parent, get_student, update_student
-from app.services.fee_service import get_outstanding_amount
+from app.services.fee_service import get_outstanding_amount, get_student_fee_summary
 from app.services.test_service import count_upcoming_tests, get_student_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
@@ -174,6 +174,9 @@ class MainWindow(QMainWindow):
 
             if index == 1:
                 self.pages.addWidget(self.create_students_page())
+                continue
+            if index == 2:
+                self.pages.addWidget(self.create_attendancce_page())
                 continue
 
             page = QWidget()
@@ -1488,8 +1491,8 @@ QDialog QLabel{{
                     font-weight: 700;
                 }
             """)
-            summary_layout = QHBoxLayout()
-            summary_layout.setSpacing(10)
+            attendance_summary_layout = QHBoxLayout()
+            attendance_summary_layout.setSpacing(10)
 
             total_label = QLabel("0")
             present_label = QLabel("0")
@@ -1521,7 +1524,83 @@ QDialog QLabel{{
             """)
 
             results_layout.addWidget(results_title)
+            test_summary_layout = QHBoxLayout()
+            test_summary_layout.setSpacing(10)
 
+            tests_label = QLabel("0")
+            average_label = QLabel("0.0%")
+            highest_label = QLabel("0.0%")
+            lowest_label = QLabel("0.0%")
+
+
+            def create_result_summary_card(title, value_label):
+                card = QFrame()
+                card.setStyleSheet("""
+                    QFrame {
+                        background-color: #FEFEFE;
+                        border: 1px solid #E9DEBA;
+                        border-radius: 8px;
+                    }
+                """)
+
+                card_layout = QVBoxLayout(card)
+                card_layout.setContentsMargins(12, 10, 12, 10)
+                card_layout.setSpacing(3)
+
+                title_label = QLabel(title)
+                title_label.setStyleSheet("""
+                    QLabel {
+                        color: #615F4B;
+                        background: transparent;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                """)
+
+                value_label.setStyleSheet("""
+                    QLabel {
+                        color: #012D54;
+                        background: transparent;
+                        font-size: 20px;
+                        font-weight: 700;
+                    }
+                """)
+
+                card_layout.addWidget(title_label)
+                card_layout.addWidget(value_label)
+
+                return card
+
+
+            test_summary_layout.addWidget(
+                create_result_summary_card(
+                    "Tests Taken",
+                    tests_label,
+                )
+            )
+
+            test_summary_layout.addWidget(
+                create_result_summary_card(
+                    "Average",
+                    average_label,
+                )
+            )
+
+            test_summary_layout.addWidget(
+                create_result_summary_card(
+                    "Highest",
+                    highest_label,
+                )
+            )
+
+            test_summary_layout.addWidget(
+                create_result_summary_card(
+                    "Lowest",
+                    lowest_label,
+                )
+            )
+
+            results_layout.addLayout(test_summary_layout)
             results_table = QTableWidget()
             results_table.setColumnCount(5)
             results_table.setHorizontalHeaderLabels([
@@ -1575,6 +1654,14 @@ QDialog QLabel{{
             results_layout.addWidget(results_table)
 
             tabs.addTab(results_tab, "Results")
+            self.load_student_results(
+                student.id,
+                results_table,
+                tests_label,
+                average_label,
+                highest_label,
+                lowest_label,
+            )
 
 
             def create_summary_card(title, value_label):
@@ -1612,23 +1699,23 @@ QDialog QLabel{{
                 return card
 
 
-            summary_layout.addWidget(
+            attendance_summary_layout.addWidget(
                 create_summary_card("Total Days", total_label)
             )
-            summary_layout.addWidget(
+            attendance_summary_layout.addWidget(
                 create_summary_card("Present", present_label)
             )
-            summary_layout.addWidget(
+            attendance_summary_layout.addWidget(
                 create_summary_card("Absent", absent_label)
             )
-            summary_layout.addWidget(
+            attendance_summary_layout.addWidget(
                 create_summary_card("Late", late_label)
             )
-            summary_layout.addWidget(
+            attendance_summary_layout.addWidget(
                 create_summary_card("Attendance", percentage_label)
             )
 
-            attendance_layout.addLayout(summary_layout)
+            attendance_layout.addLayout(attendance_summary_layout)
             
 
             attendance_layout.addWidget(attendance_title)
@@ -1695,6 +1782,107 @@ QDialog QLabel{{
             )
 
             tabs.addTab(attendance_tab, "Attendance")
+            # Fees Tab
+            fees_tab = QWidget()
+            fees_tab.setStyleSheet("""
+                QWidget {
+                    background-color: #F8F6EA;
+                }
+            """)
+
+            fees_layout = QVBoxLayout(fees_tab)
+            fees_layout.setContentsMargins(10, 10, 10, 10)
+            fees_layout.setSpacing(12)
+
+            fees_title = QLabel("Fee Summary")
+            fees_title.setStyleSheet("""
+                QLabel {
+                    color: #012D54;
+                    background: transparent;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+            """)
+
+            fees_layout.addWidget(fees_title)
+
+            fees_summary_layout = QHBoxLayout()
+            fees_summary_layout.setSpacing(10)
+
+            total_due_label = QLabel("₹0.00")
+            total_paid_label = QLabel("₹0.00")
+            outstanding_label = QLabel("₹0.00")
+
+
+            def create_fee_summary_card(title, value_label):
+                card = QFrame()
+                card.setStyleSheet("""
+                    QFrame {
+                        background-color: #FEFEFE;
+                        border: 1px solid #E9DEBA;
+                        border-radius: 8px;
+                    }
+                """)
+
+                card_layout = QVBoxLayout(card)
+                card_layout.setContentsMargins(12, 10, 12, 10)
+                card_layout.setSpacing(3)
+
+                title_label = QLabel(title)
+                title_label.setStyleSheet("""
+                    QLabel {
+                        color: #615F4B;
+                        background: transparent;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                """)
+
+                value_label.setStyleSheet("""
+                    QLabel {
+                        color: #012D54;
+                        background: transparent;
+                        font-size: 20px;
+                        font-weight: 700;
+                    }
+                """)
+
+                card_layout.addWidget(title_label)
+                card_layout.addWidget(value_label)
+
+                return card
+
+
+            fees_summary_layout.addWidget(
+                create_fee_summary_card(
+                    "Total Due",
+                    total_due_label,
+                )
+            )
+
+            fees_summary_layout.addWidget(
+                create_fee_summary_card(
+                    "Total Paid",
+                    total_paid_label,
+                )
+            )
+
+            fees_summary_layout.addWidget(
+                create_fee_summary_card(
+                    "Outstanding",
+                    outstanding_label,
+                )
+            )
+
+            fees_layout.addLayout(fees_summary_layout)
+
+            tabs.addTab(fees_tab, "Fees")
+            self.load_student_fee_summary(
+                student.id,
+                total_due_label,
+                total_paid_label,
+                outstanding_label
+            )
 
 
             # ---------------- TAB WIDGET STYLE ----------------
@@ -1852,6 +2040,10 @@ QDialog QLabel{{
         self,
         student_id,
         results_table,
+        tests_label,
+        average_label,
+        highest_label,
+        lowest_label,
     ):
         results_table.setRowCount(0)
 
@@ -1860,6 +2052,33 @@ QDialog QLabel{{
                 session,
                 student_id=student_id,
             )
+
+        percentages = []
+
+        for result in results:
+            test = result.test
+
+            if test.max_marks:
+                percentage = (
+                    result.marks / test.max_marks
+                ) * 100
+                percentages.append(percentage)
+
+        tests_taken = len(results)
+
+        if percentages:
+            average_percentage = sum(percentages) / len(percentages)
+            highest_percentage = max(percentages)
+            lowest_percentage = min(percentages)
+        else:
+            average_percentage = 0
+            highest_percentage = 0
+            lowest_percentage = 0
+
+        tests_label.setText(str(tests_taken))
+        average_label.setText(f"{average_percentage:.1f}%")
+        highest_label.setText(f"{highest_percentage:.1f}%")
+        lowest_label.setText(f"{lowest_percentage:.1f}%")
 
         results_table.setRowCount(len(results))
 
@@ -1909,3 +2128,27 @@ QDialog QLabel{{
                     result.remarks or ""
                 ),
             )
+    def load_student_fee_summary(
+        self,
+        student_id,
+        total_due_label,
+        total_paid_label,
+        outstanding_label,
+    ):
+        with SessionLocal() as session:
+            summary = get_student_fee_summary(
+                session,
+                student_id=student_id,
+            )
+
+        total_due_label.setText(
+            f"₹{summary['total_due']:,.2f}"
+        )
+
+        total_paid_label.setText(
+            f"₹{summary['total_paid']:,.2f}"
+        )
+
+        outstanding_label.setText(
+            f"₹{summary['outstanding']:,.2f}"
+        )

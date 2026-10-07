@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.models.test import TestModel
+from app.database.models.test_result import TestResult
 
 
 def create_test(
@@ -59,3 +60,15 @@ def count_upcoming_tests(
             batch_id=batch_id,
         )
     )
+def get_student_results(
+    session: Session,
+    student_id: int,
+):
+    statement = (
+        select(TestResult)
+        .join(TestModel, TestResult.test_id == TestModel.id)
+        .where(TestResult.student_id == student_id)
+        .order_by(TestModel.test_date.desc())
+    )
+
+    return list(session.scalars(statement).all())

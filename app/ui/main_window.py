@@ -6,9 +6,10 @@ from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
 from app.services.student_service import count_students,  get_students_by_batch, create_student_with_parent, get_student, update_student
 from app.services.fee_service import get_outstanding_amount
-from app.services.test_service import count_upcoming_tests
+from app.services.test_service import count_upcoming_tests, get_student_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
+from app.services.attendance_service import count_present_students, get_student_attendance
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -29,7 +30,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     
 )
-from app.services.attendance_service import count_present_students
+
 NAVY = "#012D54"
 DARK_NAVY = "#04294D"
 GOLD = "#D9B85F"
@@ -1430,9 +1431,306 @@ QDialog QLabel{{
                 Qt.TextFormat.RichText
             )
 
-            layout.addWidget(details)
-            layout.addStretch()
+                        # Student profile tabs
+            
+                        # Student profile tabs
+            tabs = QTabWidget()
+            tabs.setDocumentMode(True)
 
+            # ---------------- OVERVIEW TAB ----------------
+            overview_tab = QWidget()
+            overview_tab.setStyleSheet("""
+                QWidget {
+                    background-color: #F8F6EA;
+                }
+            """)
+
+            overview_layout = QVBoxLayout(overview_tab)
+            overview_layout.setContentsMargins(10, 10, 10, 10)
+            overview_layout.setSpacing(10)
+
+            details.setStyleSheet("""
+                QLabel {
+                    background-color: #FEFEFE;
+                    color: #012D54;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 8px;
+                    padding: 15px;
+                    font-size: 13px;
+                }
+            """)
+
+            overview_layout.addWidget(details)
+            overview_layout.addStretch()
+
+            tabs.addTab(overview_tab, "Overview")
+
+
+
+            # ---------------- ATTENDANCE TAB ----------------
+            attendance_tab = QWidget()
+            attendance_tab.setStyleSheet("""
+                QWidget {
+                    background-color: #F8F6EA;
+                }
+            """)
+
+            attendance_layout = QVBoxLayout(attendance_tab)
+            attendance_layout.setContentsMargins(10, 10, 10, 10)
+            attendance_layout.setSpacing(12)
+
+            attendance_title = QLabel("Attendance History")
+            attendance_title.setStyleSheet("""
+                QLabel {
+                    color: #012D54;
+                    background: transparent;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+            """)
+            summary_layout = QHBoxLayout()
+            summary_layout.setSpacing(10)
+
+            total_label = QLabel("0")
+            present_label = QLabel("0")
+            absent_label = QLabel("0")
+            late_label = QLabel("0")
+            percentage_label = QLabel("0.0%")
+
+            # -------------test_result tab-------------------------------
+
+            results_tab = QWidget()
+            results_tab.setStyleSheet("""
+                QWidget {
+                    background-color: #F8F6EA;
+                }
+            """)
+
+            results_layout = QVBoxLayout(results_tab)
+            results_layout.setContentsMargins(10, 10, 10, 10)
+            results_layout.setSpacing(12)
+
+            results_title = QLabel("Test Results")
+            results_title.setStyleSheet("""
+                QLabel {
+                    color: #012D54;
+                    background: transparent;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+            """)
+
+            results_layout.addWidget(results_title)
+
+            results_table = QTableWidget()
+            results_table.setColumnCount(5)
+            results_table.setHorizontalHeaderLabels([
+                "Test",
+                "Date",
+                "Marks",
+                "Percentage",
+                "Remarks",
+            ])
+
+            results_table.setEditTriggers(
+                QTableWidget.EditTrigger.NoEditTriggers
+            )
+
+            results_table.setSelectionBehavior(
+                QTableWidget.SelectionBehavior.SelectRows
+            )
+
+            results_table.verticalHeader().setVisible(False)
+            results_table.horizontalHeader().setStretchLastSection(True)
+            results_table.verticalHeader().setDefaultSectionSize(40)
+
+            results_table.setStyleSheet("""
+                QTableWidget {
+                    background-color: #FEFEFE;
+                    color: #1F2937;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 8px;
+                    gridline-color: #E9DEBA;
+                    font-size: 13px;
+                }
+
+                QTableWidget::item {
+                    padding: 8px;
+                }
+
+                QTableWidget::item:selected {
+                    background-color: #E9DEBA;
+                    color: #012D54;
+                }
+
+                QHeaderView::section {
+                    background-color: #012D54;
+                    color: #FEFEFE;
+                    padding: 9px;
+                    border: none;
+                    font-weight: 600;
+                }
+            """)
+
+            results_layout.addWidget(results_table)
+
+            tabs.addTab(results_tab, "Results")
+
+
+            def create_summary_card(title, value_label):
+                card = QFrame()
+                card.setStyleSheet("""
+                    QFrame {
+                        background-color: #FEFEFE;
+                        border: 1px solid #E9DEBA;
+                        border-radius: 8px;
+                    }
+                """)
+
+                card_layout = QVBoxLayout(card)
+                card_layout.setContentsMargins(12, 10, 12, 10)
+                card_layout.setSpacing(3)
+
+                title_label = QLabel(title)
+                title_label.setStyleSheet("""
+                    color: #615F4B;
+                    background: transparent;
+                    font-size: 11px;
+                    font-weight: 600;
+                """)
+
+                value_label.setStyleSheet("""
+                    color: #012D54;
+                    background: transparent;
+                    font-size: 20px;
+                    font-weight: 700;
+                """)
+
+                card_layout.addWidget(title_label)
+                card_layout.addWidget(value_label)
+
+                return card
+
+
+            summary_layout.addWidget(
+                create_summary_card("Total Days", total_label)
+            )
+            summary_layout.addWidget(
+                create_summary_card("Present", present_label)
+            )
+            summary_layout.addWidget(
+                create_summary_card("Absent", absent_label)
+            )
+            summary_layout.addWidget(
+                create_summary_card("Late", late_label)
+            )
+            summary_layout.addWidget(
+                create_summary_card("Attendance", percentage_label)
+            )
+
+            attendance_layout.addLayout(summary_layout)
+            
+
+            attendance_layout.addWidget(attendance_title)
+
+            attendance_table = QTableWidget()
+            attendance_table.setColumnCount(2)
+
+            attendance_table.setHorizontalHeaderLabels([
+                "Date",
+                "Status",
+            ])
+
+            attendance_table.setEditTriggers(
+                QTableWidget.EditTrigger.NoEditTriggers
+            )
+
+            attendance_table.setSelectionBehavior(
+                QTableWidget.SelectionBehavior.SelectRows
+            )
+
+            attendance_table.verticalHeader().setVisible(False)
+
+            attendance_table.horizontalHeader().setStretchLastSection(True)
+
+            attendance_table.verticalHeader().setDefaultSectionSize(40)
+
+            attendance_table.setStyleSheet("""
+                QTableWidget {
+                    background-color: #FEFEFE;
+                    color: #1F2937;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 8px;
+                    gridline-color: #E9DEBA;
+                    font-size: 13px;
+                }
+
+                QTableWidget::item {
+                    padding: 8px;
+                }
+
+                QTableWidget::item:selected {
+                    background-color: #E9DEBA;
+                    color: #012D54;
+                }
+
+                QHeaderView::section {
+                    background-color: #012D54;
+                    color: #FEFEFE;
+                    padding: 9px;
+                    border: none;
+                    font-weight: 600;
+                }
+            """)
+
+            attendance_layout.addWidget(attendance_table)
+            self.load_student_attendance(
+                student.id,
+                attendance_table,
+                total_label,
+                present_label,
+                absent_label,
+                late_label,
+                percentage_label,
+            )
+
+            tabs.addTab(attendance_tab, "Attendance")
+
+
+            # ---------------- TAB WIDGET STYLE ----------------
+            tabs.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #E9DEBA;
+                    border-radius: 8px;
+                    background-color: #F8F6EA;
+                    top: -1px;
+                }
+
+                QTabBar::tab {
+                    background-color: #E9DEBA;
+                    color: #012D54;
+                    padding: 8px 18px;
+                    margin-right: 2px;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                QTabBar::tab:selected {
+                    background-color: #012D54;
+                    color: #FEFEFE;
+                }
+
+                QTabBar::tab:hover {
+                    background-color: #D9B85F;
+                    color: #012D54;
+                }
+            """)
+
+            layout.addWidget(tabs)
+            layout.addStretch()
+            layout.addStretch()
             # Close button
             close_button = QPushButton("Close")
             close_button.setFixedWidth(100)
@@ -1487,4 +1785,127 @@ QDialog QLabel{{
             """)
 
             dialog.exec()
-                                            
+    def load_student_attendance(
+        self,
+        student_id,
+        attendance_table,
+        total_label,
+        present_label,
+        absent_label,
+        late_label,
+        percentage_label,
+    ):
+        attendance_table.setRowCount(0)
+
+        with SessionLocal() as session:
+            records = get_student_attendance(
+                session,
+                student_id=student_id,
+            )
+
+        total_days = len(records)
+        present_days = sum(
+            1 for record in records
+            if record.status == "PRESENT"
+        )
+        absent_days = sum(
+            1 for record in records
+            if record.status == "ABSENT"
+        )
+        late_days = sum(
+            1 for record in records
+            if record.status == "LATE"
+        )
+
+        if total_days > 0:
+            attendance_percentage = (
+                present_days / total_days
+            ) * 100
+        else:
+            attendance_percentage = 0
+
+        total_label.setText(str(total_days))
+        present_label.setText(str(present_days))
+        absent_label.setText(str(absent_days))
+        late_label.setText(str(late_days))
+        percentage_label.setText(
+            f"{attendance_percentage:.1f}%"
+        )
+
+        attendance_table.setRowCount(len(records))
+
+        for row, record in enumerate(records):
+            attendance_table.setItem(
+                row,
+                0,
+                QTableWidgetItem(
+                    record.date.strftime("%d/%m/%Y")
+                ),
+            )
+
+            attendance_table.setItem(
+                row,
+                1,
+                QTableWidgetItem(record.status),
+            )
+    def load_student_results(
+        self,
+        student_id,
+        results_table,
+    ):
+        results_table.setRowCount(0)
+
+        with SessionLocal() as session:
+            results = get_student_results(
+                session,
+                student_id=student_id,
+            )
+
+        results_table.setRowCount(len(results))
+
+        for row, result in enumerate(results):
+            test = result.test
+
+            percentage = (
+                result.marks / test.max_marks * 100
+                if test.max_marks
+                else 0
+            )
+
+            results_table.setItem(
+                row,
+                0,
+                QTableWidgetItem(test.name),
+            )
+
+            results_table.setItem(
+                row,
+                1,
+                QTableWidgetItem(
+                    test.test_date.strftime("%d/%m/%Y")
+                ),
+            )
+
+            results_table.setItem(
+                row,
+                2,
+                QTableWidgetItem(
+                    f"{result.marks} / {test.max_marks}"
+                ),
+            )
+
+            results_table.setItem(
+                row,
+                3,
+                QTableWidgetItem(
+                    f"{percentage:.1f}%"
+                ),
+            )
+
+            results_table.setItem(
+                row,
+                4,
+                QTableWidgetItem(
+                    result.remarks or ""
+                ),
+            )

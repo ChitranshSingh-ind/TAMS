@@ -50,7 +50,18 @@ def get_attendance_by_date(
 
     return list(session.scalars(statement).all())
 
+def get_student_attendance(
+    session: Session,
+    student_id: int,
+) -> list[Attendance]:
 
+    statement = (
+        select(Attendance)
+        .where(Attendance.student_id == student_id)
+        .order_by(Attendance.date.desc())
+    )
+
+    return list(session.scalars(statement).all())
 def count_present_students(
     session: Session,
     attendance_date: date,

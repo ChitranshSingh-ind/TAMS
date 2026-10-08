@@ -95,3 +95,52 @@ def count_present_students(
         )
 
     return len(session.scalars(statement).all())
+def get_student_attendance_summary(
+    session: Session,
+    student_id: int,
+) -> dict[str, int | float]:
+    attendance_records = get_student_attendance(
+        session,
+        student_id,
+    )
+
+    total = len(attendance_records)
+
+    present = sum(
+        1
+        for record in attendance_records
+        if record.status == "PRESENT"
+    )
+
+    absent = sum(
+        1
+        for record in attendance_records
+        if record.status == "ABSENT"
+    )
+
+    late = sum(
+        1
+        for record in attendance_records
+        if record.status == "LATE"
+    )
+
+    leave = sum(
+        1
+        for record in attendance_records
+        if record.status == "LEAVE"
+    )
+
+    percentage = (
+        (present / total) * 100
+        if total > 0
+        else 0.0
+    )
+
+    return {
+        "total": total,
+        "present": present,
+        "absent": absent,
+        "late": late,
+        "leave": leave,
+        "percentage": round(percentage, 1),
+    }

@@ -9,7 +9,8 @@ from app.services.fee_service import get_outstanding_amount, get_student_fee_sum
 from app.services.test_service import count_upcoming_tests, get_student_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
-from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date
+from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary
+from app.database.models.batch import Batch
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -2346,8 +2347,24 @@ QDialog QLabel{{
         layout.addLayout(button_layout)
 
         return page
+    def is_batch_class_day(self, batch, selected_date):
+        day_name = selected_date.strftime("%A")
+
+        class_days = [
+            day.strip()
+            for day in batch.days.split(",")
+        ]
+
+        return day_name in class_days
+    
+    
     def load_attendance_students(self):
         selected_batch_id = self.batch_selector.currentData()
+        selected_date = (
+            self.attendance_date_picker.date().toPyDate()
+        )
+        
+        
 
         attendance_date = (
             self.attendance_date_picker.date().toPyDate()
@@ -2364,6 +2381,30 @@ QDialog QLabel{{
                 attendance_date,
                 batch_id=selected_batch_id,
             )
+
+            selected_batch = None
+
+            if selected_batch_id is not None:
+                selected_batch = session.get(
+                    Batch,
+                    selected_batch_id,
+                )
+            if (
+                selected_batch is not None
+                and not self.is_batch_class_day(
+                    selected_batch,
+                    selected_date,
+                )
+            ):
+                self.attendance_table.setRowCount(0)
+                self.attendance_status = {}
+
+                self.attendance_summary.setText(
+                    "Attendance unavailable — "
+                    f"{selected_date.strftime('%A')} is not a class day."
+                )
+
+                return
 
         self.attendance_table.setRowCount(0)
 

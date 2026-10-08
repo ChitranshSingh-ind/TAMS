@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.models.attendance import Attendance
-
+from app.database.models.attendance_override import AttendanceOverride
 
 def mark_attendance(
     session: Session,
@@ -144,3 +144,38 @@ def get_student_attendance_summary(
         "leave": leave,
         "percentage": round(percentage, 1),
     }
+def create_attendance_override(
+    session: Session,
+    *,
+    batch_id: int,
+    override_date: date,
+    reason: str | None = None,
+) -> AttendanceOverride:
+    override = AttendanceOverride(
+        batch_id=batch_id,
+        date=override_date,
+        reason=reason,
+    )
+
+    session.add(override)
+    session.commit()
+    session.refresh(override)
+
+    return override
+
+
+def get_attendance_override(
+    session: Session,
+    *,
+    batch_id: int,
+    override_date: date,
+) -> AttendanceOverride | None:
+    statement = (
+        select(AttendanceOverride)
+        .where(
+            AttendanceOverride.batch_id == batch_id,
+            AttendanceOverride.date == override_date,
+        )
+    )
+
+    return session.scalar(statement)

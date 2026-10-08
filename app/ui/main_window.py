@@ -9,7 +9,7 @@ from app.services.fee_service import get_outstanding_amount, get_student_fee_sum
 from app.services.test_service import count_upcoming_tests, get_student_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
-from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary
+from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary, create_attendance_override, get_attendance_override
 from app.database.models.batch import Batch
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -2339,10 +2339,44 @@ QDialog QLabel{{
             }
         """)
         save_button.clicked.connect(self.save_attendance)
+        override_button = QPushButton("Override Class Day")
+        self.attendance_override_button = override_button
+
+        override_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+        override_button.setFixedHeight(42)
+
+        override_button.setStyleSheet("""
+            QPushButton {
+                background-color: #E9DEBA;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 7px;
+                padding: 8px 20px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+
+            QPushButton:hover {
+                background-color: #D9B85F;
+            }
+        """)
+
+        override_button.clicked.connect(
+            self.override_attendance_day
+        )
 
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        button_layout.addWidget(save_button)
+
+        button_layout.addWidget(
+            override_button
+        )
+
+        button_layout.addWidget(
+            save_button
+        )
 
         layout.addLayout(button_layout)
 
@@ -2389,12 +2423,22 @@ QDialog QLabel{{
                     Batch,
                     selected_batch_id,
                 )
+                attendance_override = None
+
+            if selected_batch_id is not None:
+                attendance_override = get_attendance_override(
+                    session,
+                    batch_id=selected_batch_id,
+                    override_date=selected_date,
+                )
             if (
                 selected_batch is not None
                 and not self.is_batch_class_day(
                     selected_batch,
                     selected_date,
                 )
+                and attendance_override is None
+                
             ):
                 self.attendance_table.setRowCount(0)
                 self.attendance_status = {}
@@ -2622,6 +2666,44 @@ QDialog QLabel{{
         attendance_date = (
             self.attendance_date_picker.date().toPyDate()
         )
+        with SessionLocal() as session:
+            selected_batch = session.get(
+                Batch,
+                batch_id,
+            )
+
+        if selected_batch is None:
+            QMessageBox.warning(
+                self,
+                "Batch Not Found",
+                "The selected batch could not be found."
+            )
+            return
+        with SessionLocal() as session:
+            attendance_override = get_attendance_override(
+                session,
+                batch_id=batch_id,
+                override_date=attendance_date,
+            )
+
+        if (
+            not self.is_batch_class_day(
+                selected_batch,
+                attendance_date,
+            )
+            and attendance_override is None
+        ):
+            QMessageBox.warning(
+                self,
+                "No Class Today",
+                (
+                    f"{selected_batch.name} does not have a class "
+                    f"on {attendance_date.strftime('%A')}."
+                ),
+            )
+            return
+
+       
 
         if not hasattr(self, "attendance_status"):
             QMessageBox.warning(
@@ -2663,3 +2745,73 @@ QDialog QLabel{{
         )
 
         self.refresh_dashboard()
+    def override_attendance_day(self):
+        batch_id = self.batch_selector.currentData()
+
+        if batch_id is None:
+            QMessageBox.warning(
+                self,
+                "Select Batch",
+                "Please select a specific batch before overriding the class day."
+            )
+            return
+
+        override_date = (
+            self.attendance_date_picker.date().toPyDate()
+        )
+
+        with SessionLocal() as session:
+            batch = session.get(
+                Batch,
+                batch_id,
+            )
+
+            if batch is None:
+                QMessageBox.warning(
+                    self,
+                    "Batch Not Found",
+                    "The selected batch could not be found."
+                )
+                return
+
+            existing_override = get_attendance_override(
+                session,
+                batch_id=batch_id,
+                override_date=override_date,
+            )
+
+            if existing_override is not None:
+                QMessageBox.information(
+                    self,
+                    "Already Overridden",
+                    (
+                        f"{override_date.strftime('%A, %d %B %Y')} "
+                        "is already marked as an extra class day."
+                    ),
+                )
+                return
+
+            result = QMessageBox.question(
+                self,
+                "Override Class Day",
+                (
+                    f"{override_date.strftime('%A, %d %B %Y')} "
+                    f"is not a scheduled class day for {batch.name}.\n\n"
+                    "Do you want to mark this date as an extra class day?"
+                ),
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+
+            if result != QMessageBox.StandardButton.Yes:
+                return
+
+            create_attendance_override(
+                session,
+                batch_id=batch_id,
+                override_date=override_date,
+                reason="Extra class",
+            )
+
+        self.load_attendance_students()

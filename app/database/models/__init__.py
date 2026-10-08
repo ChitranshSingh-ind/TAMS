@@ -7,6 +7,7 @@ from app.database.models.fee_payment import FeePayment
 from app.database.models.test import TestModel
 from app.database.models.lesson import Lesson
 from app.database.models.test_result import TestResult
+from app.database.models.attendance_override import AttendanceOverride
 
 __all__ = [
     "Batch",
@@ -18,4 +19,5 @@ __all__ = [
     "TestModel",
     "Lesson",
     "TestResult",
+    "AttendanceOverride",
 ]

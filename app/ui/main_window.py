@@ -2207,6 +2207,7 @@ QDialog QLabel{{
 
         date_picker = QDateEdit()
         self.attendance_date_picker = date_picker
+        
         date_picker.setDate(QDate.currentDate())
         date_picker.setCalendarPopup(True)
         date_picker.setFixedWidth(150)
@@ -2227,12 +2228,27 @@ QDialog QLabel{{
         date_layout.addStretch()
 
         layout.addLayout(date_layout)
+        attendance_summary = QLabel("Present: 0  |  Absent: 0  |  Total: 0")
+        self.attendance_summary = attendance_summary
+
+        attendance_summary.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 6px 0;
+            }
+        """)
+
+        layout.addWidget(attendance_summary)
 
         # Attendance table
         attendance_table = QTableWidget()
         self.attendance_table = attendance_table
         attendance_table.setColumnCount(4)
-
+        self.attendance_date_picker.dateChanged.connect(
+                    self.load_attendance_students
+                )
         attendance_table.setHorizontalHeaderLabels([
             "Admission No.",
             "Student Name",
@@ -2453,6 +2469,26 @@ QDialog QLabel{{
                     else normal_style
                 )
 
+                present_count = sum(
+                    1
+                    for status in self.attendance_status.values()
+                    if status == "PRESENT"
+                )
+
+                absent_count = sum(
+                    1
+                    for status in self.attendance_status.values()
+                    if status == "ABSENT"
+                )
+
+                total_count = len(self.attendance_status)
+
+                self.attendance_summary.setText(
+                    f"Present: {present_count}  |  "
+                    f"Absent: {absent_count}  |  "
+                    f"Total: {total_count}"
+)
+
             absent_button.clicked.connect(
                 lambda checked=False,
                     student_id=student.id,
@@ -2512,6 +2548,25 @@ QDialog QLabel{{
                 3,
                 present_widget
             )
+        present_count = sum(
+            1
+            for status in self.attendance_status.values()
+            if status == "PRESENT"
+        )
+
+        absent_count = sum(
+            1
+            for status in self.attendance_status.values()
+            if status == "ABSENT"
+        )
+
+        total_count = len(self.attendance_status)
+
+        self.attendance_summary.setText(
+            f"Present: {present_count}  |  "
+            f"Absent: {absent_count}  |  "
+            f"Total: {total_count}"
+        )
     def save_attendance(self):
         batch_id = self.batch_selector.currentData()
 

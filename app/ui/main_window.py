@@ -6,7 +6,7 @@ from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
 from app.services.student_service import count_students,  get_students_by_batch, create_student_with_parent, get_student, update_student
 from app.services.fee_service import get_outstanding_amount, get_student_fee_summary
-from app.services.test_service import count_upcoming_tests, get_student_results, create_test, get_tests
+from app.services.test_service import count_upcoming_tests, get_student_results, create_test, get_tests, get_test_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
 from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary, create_attendance_override, get_attendance_override
@@ -737,6 +737,32 @@ QDialog QLabel{{
         create_button.clicked.connect(self.create_test_dialog)
         header_layout.addWidget(create_button)
 
+        check_results_button = QPushButton("Check Results")
+        check_results_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        check_results_button.setFixedHeight(42)
+        check_results_button.setEnabled(False)
+        check_results_button.setStyleSheet("""
+            QPushButton {
+                background: #E9DEBA;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 8px;
+                padding: 10px 18px;
+                font-weight: 600;
+            }
+            QPushButton:hover:enabled {
+                background: #D9B85F;
+            }
+            QPushButton:disabled {
+                color: #8B887A;
+                background: #F1EBD3;
+                border-color: #E9DEBA;
+            }
+        """)
+        check_results_button.clicked.connect(self.check_selected_test_results)
+        header_layout.addWidget(check_results_button)
+        self.check_results_button = check_results_button
+
         layout.addLayout(header_layout)
 
         self.results_tests_table = QTableWidget()
@@ -753,6 +779,9 @@ QDialog QLabel{{
         )
         self.results_tests_table.setSelectionMode(
             QTableWidget.SelectionMode.SingleSelection
+        )
+        self.results_tests_table.itemSelectionChanged.connect(
+            self.update_check_results_button
         )
         self.results_tests_table.verticalHeader().setVisible(False)
         self.results_tests_table.horizontalHeader().setSectionResizeMode(
@@ -808,11 +837,102 @@ QDialog QLabel{{
         self.results_tests_table.setRowCount(len(rows))
         for row_index, values in enumerate(rows):
             for column_index, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column_index == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, tests[row_index].id)
                 self.results_tests_table.setItem(
+                    row_index,
+                    column_index,
+                    item,
+                )
+
+    def update_check_results_button(self):
+        self.check_results_button.setEnabled(
+            self.results_tests_table.currentRow() >= 0
+        )
+
+    def check_selected_test_results(self):
+        selected_row = self.results_tests_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.information(
+                self,
+                "Select a Test",
+                "Select a test from the table first.",
+            )
+            return
+
+        test_item = self.results_tests_table.item(selected_row, 0)
+        test_id = test_item.data(Qt.ItemDataRole.UserRole)
+        test_name = test_item.text()
+
+        with SessionLocal() as session:
+            results = get_test_results(session, int(test_id))
+            rows = []
+            for result in results:
+                student = result.student
+                student_name = (
+                    f"{student.first_name} {student.last_name or ''}"
+                ).strip() if student is not None else "Unknown student"
+                percentage = (
+                    result.marks / result.test.max_marks * 100
+                    if result.test.max_marks
+                    else 0
+                )
+                rows.append((
+                    student.admission_number if student is not None else "-",
+                    student_name,
+                    str(result.marks),
+                    f"{percentage:.1f}%",
+                    result.remarks or "—",
+                ))
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Results — {test_name}")
+        dialog.resize(760, 460)
+        layout = QVBoxLayout(dialog)
+
+        heading = QLabel(f"Recorded results: {test_name}")
+        heading.setStyleSheet(
+            "color: #012D54; font-size: 18px; font-weight: 700;"
+        )
+        layout.addWidget(heading)
+
+        results_table = QTableWidget()
+        results_table.setColumnCount(5)
+        results_table.setHorizontalHeaderLabels(
+            ["Admission No.", "Student", "Marks", "Percentage", "Remarks"]
+        )
+        results_table.setRowCount(len(rows))
+        results_table.verticalHeader().setVisible(False)
+        results_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        results_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        for row_index, values in enumerate(rows):
+            for column_index, value in enumerate(values):
+                results_table.setItem(
                     row_index,
                     column_index,
                     QTableWidgetItem(value),
                 )
+
+        layout.addWidget(results_table)
+
+        if not rows:
+            empty_label = QLabel(
+                "No marks have been recorded for this test yet."
+            )
+            empty_label.setStyleSheet("color: #615F4B;")
+            layout.addWidget(empty_label)
+
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+
+        dialog.exec()
 
     def create_test_dialog(self):
         with SessionLocal() as session:

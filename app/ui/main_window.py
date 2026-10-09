@@ -673,7 +673,13 @@ QDialog QLabel{{
         
 
         lower_layout.addWidget(today_card, 1)
-        lower_la    def create_results_page(self):
+        lower_layout.addWidget(alerts_card, 1)
+
+        layout.addLayout(lower_layout)
+
+        return page
+
+    def create_results_page(self):
         page = QWidget()
         page.setObjectName("resultsPage")
 

@@ -181,6 +181,10 @@ class MainWindow(QMainWindow):
                 self.pages.addWidget(self.create_attendance_page())
                 continue
 
+            if index == 3:
+                self.pages.addWidget(self.create_results_page())
+                continue
+
             page = QWidget()
             layout = QVBoxLayout(page)
 
@@ -189,8 +193,7 @@ class MainWindow(QMainWindow):
             label.setStyleSheet("font-size: 28px;")
 
             layout.addWidget(label)
-
-        self.pages.addWidget(page)
+            self.pages.addWidget(page)
         workspace_layout.addWidget(self.pages)
         content_layout.addLayout(workspace_layout)
 
@@ -669,6 +672,39 @@ QDialog QLabel{{
         layout.addLayout(lower_layout)
 
         return page
+    def create_results_page(self):
+        page = QWidget()
+        page.setObjectName("resultsPage")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 25, 30, 30)
+        layout.setSpacing(18)
+
+        title = QLabel("Results")
+        title.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                font-size: 26px;
+                font-weight: 700;
+            }
+        """)
+
+        subtitle = QLabel(
+            "Create tests, enter marks, and track student performance."
+        )
+        subtitle.setStyleSheet("""
+            QLabel {
+                color: #615F4B;
+                font-size: 13px;
+            }
+        """)
+
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addStretch()
+
+        return page
+
     def create_students_page(self):
         page = QWidget()
         page.setObjectName("studentsPage")

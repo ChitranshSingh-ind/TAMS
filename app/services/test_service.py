@@ -49,6 +49,21 @@ def get_upcoming_tests(
     return list(session.scalars(statement).all())
 
 
+def get_tests(
+    session: Session,
+    batch_id: int | None = None,
+) -> list[TestModel]:
+    statement = select(TestModel).order_by(
+        TestModel.test_date.desc(),
+        TestModel.id.desc(),
+    )
+
+    if batch_id is not None:
+        statement = statement.where(TestModel.batch_id == batch_id)
+
+    return list(session.scalars(statement).all())
+
+
 def count_upcoming_tests(
     session: Session,
     batch_id: int | None = None,

@@ -4,12 +4,28 @@ from app.ui.add_student_dialog import AddStudentDialog
 from PyQt6.QtCore import Qt, QDate
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
-from app.services.student_service import count_students,  get_students_by_batch, create_student_with_parent, get_student, update_student
+from app.services.student_service import (
+    count_students,
+    get_students_by_batch,
+    create_student_with_parent,
+    get_student,
+    update_student,
+    update_student_with_parent,
+)
 from app.services.fee_service import get_outstanding_amount, get_student_fee_summary
 from app.services.test_service import count_upcoming_tests, get_student_results, create_test, get_tests, get_test_results, save_test_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
-from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary, create_attendance_override, get_attendance_override
+from app.services.attendance_service import (
+    count_present_students,
+    get_student_attendance,
+    mark_attendance,
+    get_attendance_by_date,
+    get_student_attendance_summary,
+    create_attendance_override,
+    get_attendance_override,
+    save_batch_attendance,
+)
 from app.database.models.batch import Batch
 from app.database.models.test import TestModel
 from PyQt6.QtWidgets import (
@@ -112,6 +128,7 @@ class MainWindow(QMainWindow):
 
         content_toolbar_layout.addWidget(batch_label)
         content_toolbar_layout.addWidget(self.batch_selector)
+        self.batch_selector.currentIndexChanged.connect(self.on_batch_changed)
 
         content_layout.addWidget(content_toolbar)
 
@@ -519,42 +536,56 @@ QDialog QLabel{{
     color: #012D54;
 }}
         """)
-    def change_page(self,index):
+    def change_page(self, index):
         self.pages.setCurrentIndex(index)
-        if index == 1:
+        if index == 0:
+            self.refresh_dashboard()
+        elif index == 1:
             self.load_students()
-        if index == 2:
+        elif index == 2:
             self.load_attendance_students()
-        if index == 3:
+        elif index == 3:
             self.load_results_tests()
 
         for button in self.sidebar_buttons:
             button.setProperty("active", button.property("page_index") == index)
             button.style().unpolish(button)
             button.style().polish(button)
-    def load_batches(self):
-        self.batch_selector.clear()
 
+    def on_batch_changed(self):
+        self.refresh_dashboard()
+        current_index = self.pages.currentIndex()
+        if current_index == 1:
+            self.load_students()
+        elif current_index == 2:
+            self.load_attendance_students()
+        elif current_index == 3:
+            self.load_results_tests()
+
+    def load_batches(self):
+        current_selected_batch = self.batch_selector.currentData()
+
+        self.batch_selector.blockSignals(True)
+        self.batch_selector.clear()
         self.batch_selector.addItem("All Batches", None)
-        self.batch_selector.currentIndexChanged.connect(self.refresh_dashboard)
-        self.batch_selector.currentIndexChanged.connect(self.load_students)
-        self.batch_selector.currentIndexChanged.connect(
-    self.load_attendance_students
-)
-        self.batch_selector.currentIndexChanged.connect(
-            self.load_results_tests
-        )
+
         with SessionLocal() as session:
             batches = get_active_batches(session)
             for batch in batches:
                 self.batch_selector.addItem(
-                    batch.name, 
-                    batch.id
+                    batch.name,
+                    batch.id,
                 )
 
-                
-        self.pages.setCurrentIndex(0)
-        self.refresh_dashboard()
+        index = self.batch_selector.findData(current_selected_batch)
+        if index >= 0:
+            self.batch_selector.setCurrentIndex(index)
+        else:
+            self.batch_selector.setCurrentIndex(0)
+
+        self.batch_selector.blockSignals(False)
+
+        self.on_batch_changed()
 
     def create_dashboard_page(self):
         page = QWidget()
@@ -1562,9 +1593,8 @@ QDialog QLabel{{
             else:
                 self.attendance_count_label.setText(f"{present_count}/{student_count}")
 
-
-                self.fees_pending_label.setText(f"{outstanding_amount:,.0f}")
-                self.upcoming_tests_label.setText(str(upcoming_test_count))
+            self.fees_pending_label.setText(f"₹{outstanding_amount:,.0f}")
+            self.upcoming_tests_label.setText(str(upcoming_test_count))
             if not today_lessons:
                 self.today_classes_label.setText(
                     "No classes scheduled for today."
@@ -1734,198 +1764,151 @@ QDialog QLabel{{
                 )
                 return
 
-            # Load active batches
             batches = get_active_batches(session)
 
-            dialog = AddStudentDialog(
-                batches=batches,
-                parent=self,
+            admission_number = student.admission_number or ""
+            first_name = student.first_name or ""
+            last_name = student.last_name or ""
+            parent_name = student.parent.name if student.parent else ""
+            parent_phone = student.parent.phone if student.parent else ""
+            whatsapp_number = student.parent.whatsapp_number if student.parent else ""
+            batch_id = student.batch_id
+            date_of_birth = student.date_of_birth
+            school_name = student.school_name or ""
+            admission_date = student.admission_date
+            status = student.status or "ACTIVE"
+            notes = student.notes or ""
+
+        dialog = AddStudentDialog(
+            batches=batches,
+            parent=self,
+        )
+
+        dialog.admission_number_input.setText(admission_number)
+        dialog.first_name_input.setText(first_name)
+        dialog.last_name_input.setText(last_name)
+        dialog.parent_name_input.setText(parent_name)
+        dialog.parent_phone_input.setText(parent_phone)
+        dialog.whatsapp_input.setText(whatsapp_number)
+
+        if batch_id is not None:
+            batch_index = dialog.batch_input.findData(batch_id)
+            if batch_index >= 0:
+                dialog.batch_input.setCurrentIndex(batch_index)
+
+        if date_of_birth:
+            dialog.date_of_birth_input.setDate(
+                QDate(
+                    date_of_birth.year,
+                    date_of_birth.month,
+                    date_of_birth.day,
+                )
             )
 
-            # -----------------------------
-            # Fill existing student data
-            # -----------------------------
+        dialog.school_input.setText(school_name)
 
-            dialog.admission_number_input.setText(
-                student.admission_number or ""
+        if admission_date:
+            dialog.admission_date_input.setDate(
+                QDate(
+                    admission_date.year,
+                    admission_date.month,
+                    admission_date.day,
+                )
             )
 
-            dialog.first_name_input.setText(
-                student.first_name or ""
+        status_index = dialog.status_input.findText(status)
+        if status_index >= 0:
+            dialog.status_input.setCurrentIndex(status_index)
+
+        dialog.notes_input.setPlainText(notes)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        new_admission_number = dialog.admission_number_input.text().strip() or None
+        new_first_name = dialog.first_name_input.text().strip()
+        new_last_name = dialog.last_name_input.text().strip() or None
+        new_parent_name = dialog.parent_name_input.text().strip()
+        new_parent_phone = dialog.parent_phone_input.text().strip() or None
+        new_whatsapp_number = dialog.whatsapp_input.text().strip() or None
+        new_batch_id = dialog.batch_input.currentData()
+
+        dob = dialog.date_of_birth_input.date()
+        if dob == dialog.date_of_birth_input.minimumDate():
+            new_date_of_birth = None
+        else:
+            new_date_of_birth = dob.toPyDate()
+
+        new_school_name = dialog.school_input.text().strip() or None
+        new_admission_date = dialog.admission_date_input.date().toPyDate()
+        new_status = dialog.status_input.currentText()
+        new_notes = dialog.notes_input.toPlainText().strip() or None
+
+        if not new_first_name:
+            QMessageBox.warning(
+                self,
+                "Missing Information",
+                "Please enter the student's first name.",
             )
+            return
 
-            dialog.last_name_input.setText(
-                student.last_name or ""
+        if not new_parent_name:
+            QMessageBox.warning(
+                self,
+                "Missing Information",
+                "Please enter the parent's name.",
             )
+            return
 
-            if student.parent:
-                dialog.parent_name_input.setText(
-                    student.parent.name or ""
-                )
-
-                dialog.parent_phone_input.setText(
-                    student.parent.phone or ""
-                )
-
-                dialog.whatsapp_input.setText(
-                    student.parent.whatsapp_number or ""
-                )
-
-            # Select student's batch
-            if student.batch_id is not None:
-                batch_index = dialog.batch_input.findData(
-                    student.batch_id
-                )
-
-                if batch_index >= 0:
-                    dialog.batch_input.setCurrentIndex(
-                        batch_index
-                    )
-
-            # DOB
-            if student.date_of_birth:
-                dialog.date_of_birth_input.setDate(
-                    QDate(
-                        student.date_of_birth.year,
-                        student.date_of_birth.month,
-                        student.date_of_birth.day,
-                    )
-                )
-
-            # School
-            dialog.school_input.setText(
-                student.school_name or ""
+        if new_batch_id is None:
+            QMessageBox.warning(
+                self,
+                "Missing Information",
+                "Please select a batch.",
             )
+            return
 
-            # Admission date
-            if student.admission_date:
-                dialog.admission_date_input.setDate(
-                    QDate(
-                        student.admission_date.year,
-                        student.admission_date.month,
-                        student.admission_date.day,
-                    )
-                )
-
-            # Status
-            status_index = dialog.status_input.findText(
-                student.status
-            )
-
-            if status_index >= 0:
-                dialog.status_input.setCurrentIndex(
-                    status_index
-                )
-
-            # Notes
-            dialog.notes_input.setPlainText(
-                student.notes or ""
-            )
-
-            # -----------------------------
-            # Show dialog
-            # -----------------------------
-
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-
-        # Read updated values
-            admission_number = dialog.admission_number_input.text().strip() or None
-            first_name = dialog.first_name_input.text().strip()
-            last_name = dialog.last_name_input.text().strip()
-            parent_name = dialog.parent_name_input.text().strip()
-            parent_phone = dialog.parent_phone_input.text().strip()
-            whatsapp_number = dialog.whatsapp_input.text().strip()
-
-            batch_id = dialog.batch_input.currentData()
-
-            dob = dialog.date_of_birth_input.date()
-            if dob == dialog.date_of_birth_input.minimumDate():
-                date_of_birth = None
-            else:
-                date_of_birth = dob.toPyDate()
-
-            school_name = dialog.school_input.text().strip()
-
-            admission_date = dialog.admission_date_input.date().toPyDate()
-
-            status = dialog.status_input.currentText()
-
-            notes = dialog.notes_input.toPlainText().strip()
-
-            # Basic validation
-            if not first_name:
-                QMessageBox.warning(
-                    self,
-                    "Missing Information",
-                    "Please enter the student's first name.",
-                )
-                return
-
-            if not parent_name:
-                QMessageBox.warning(
-                    self,
-                    "Missing Information",
-                    "Please enter the parent's name.",
-                )
-                return
-
-            if batch_id is None:
-                QMessageBox.warning(
-                    self,
-                    "Missing Information",
-                    "Please select a batch.",
-                )
-                return
-
+        try:
             with SessionLocal() as session:
-                try:
-                    update_student(
-                        session,
-                        student_id,
-                        admission_number=admission_number,
-                        first_name=first_name,
-                        last_name=last_name,
-                        batch_id=batch_id,
-                        date_of_birth=date_of_birth,
-                        school_name=school_name,
-                        admission_date=admission_date,
-                        status=status,
-                        notes=notes,
-                    )
+                update_student_with_parent(
+                    session=session,
+                    student_id=student_id,
+                    admission_number=new_admission_number,
+                    first_name=new_first_name,
+                    last_name=new_last_name,
+                    parent_name=new_parent_name,
+                    parent_phone=new_parent_phone,
+                    whatsapp_number=new_whatsapp_number,
+                    batch_id=new_batch_id,
+                    date_of_birth=new_date_of_birth,
+                    school_name=new_school_name,
+                    admission_date=new_admission_date,
+                    status=new_status,
+                    notes=new_notes,
+                )
 
-                    # Update parent details
-                    student = get_student(session, student_id)
+            self.load_students()
+            self.refresh_dashboard()
 
-                    if student and student.parent:
-                        student.parent.name = parent_name
-                        student.parent.phone = parent_phone or None
-                        student.parent.whatsapp_number = whatsapp_number or None
-                        session.commit()
+            QMessageBox.information(
+                self,
+                "Student Updated",
+                "Student details have been updated successfully.",
+            )
 
-                    self.load_students()
-                    self.refresh_dashboard()
+        except ValueError as e:
+            QMessageBox.warning(
+                self,
+                "Update Failed",
+                str(e),
+            )
 
-                    QMessageBox.information(
-                        self,
-                        "Student Updated",
-                        "Student details have been updated successfully.",
-                    )
-
-                except ValueError as e:
-                    QMessageBox.warning(
-                        self,
-                        "Update Failed",
-                        str(e),
-                    )
-
-                except Exception as e:
-                    session.rollback()
-                    QMessageBox.critical(
-                        self,
-                        "Update Failed",
-                        f"Could not update the student.\n\n{e}",
-                    )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Update Failed",
+                f"Could not update the student.\n\n{e}",
+            )
     def view_student(self, student_id):
         with SessionLocal() as session:
             student = get_student(session, student_id)
@@ -1979,594 +1962,594 @@ QDialog QLabel{{
                     "%d/%m/%Y"
                 )
 
-            # Create dialog
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Student Profile")
-            dialog.resize(600, 550)
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Student Profile")
+        dialog.resize(600, 550)
 
-            layout = QVBoxLayout(dialog)
-            layout.setContentsMargins(25, 25, 25, 25)
-            layout.setSpacing(15)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(15)
 
-            # Title
-            title = QLabel(student_name)
-            title.setObjectName("studentProfileTitle")
+        # Title
+        title = QLabel(student_name)
+        title.setObjectName("studentProfileTitle")
 
-            subtitle = QLabel(
-                f"Admission No. • {admission_number}"
-            )
-            subtitle.setObjectName("studentProfileSubtitle")
+        subtitle = QLabel(
+            f"Admission No. • {admission_number}"
+        )
+        subtitle.setObjectName("studentProfileSubtitle")
 
-            layout.addWidget(title)
-            layout.addWidget(subtitle)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
 
-            # Student details
-            details = QLabel(
-                f"""
-                <b>Student Information</b><br><br>
+        # Student details
+        details = QLabel(
+            f"""
+            <b>Student Information</b><br><br>
 
-                <b>School:</b> {school_name}<br>
-                <b>Batch:</b> {batch_name}<br>
-                <b>Status:</b> {status}<br>
-                <b>Date of Birth:</b> {date_of_birth}<br>
-                <b>Admission Date:</b> {admission_date}<br><br>
+            <b>School:</b> {school_name}<br>
+            <b>Batch:</b> {batch_name}<br>
+            <b>Status:</b> {status}<br>
+            <b>Date of Birth:</b> {date_of_birth}<br>
+            <b>Admission Date:</b> {admission_date}<br><br>
 
-                <b>Parent / Guardian</b><br><br>
+            <b>Parent / Guardian</b><br><br>
 
-                <b>Name:</b> {parent_name}<br>
-                <b>Phone:</b> {parent_phone}<br>
-                <b>WhatsApp:</b> {whatsapp_number}<br><br>
+            <b>Name:</b> {parent_name}<br>
+            <b>Phone:</b> {parent_phone}<br>
+            <b>WhatsApp:</b> {whatsapp_number}<br><br>
 
-                <b>Notes</b><br><br>
-                {notes}
-                """
-            )
+            <b>Notes</b><br><br>
+            {notes}
+            """
+        )
 
-            details.setWordWrap(True)
-            details.setTextFormat(
-                Qt.TextFormat.RichText
-            )
+        details.setWordWrap(True)
+        details.setTextFormat(
+            Qt.TextFormat.RichText
+        )
 
-                        # Student profile tabs
-            
-                        # Student profile tabs
-            tabs = QTabWidget()
-            tabs.setDocumentMode(True)
+                    # Student profile tabs
+        
+                    # Student profile tabs
+        tabs = QTabWidget()
+        tabs.setDocumentMode(True)
 
-            # ---------------- OVERVIEW TAB ----------------
-            overview_tab = QWidget()
-            overview_tab.setStyleSheet("""
-                QWidget {
-                    background-color: #F8F6EA;
-                }
-            """)
+        # ---------------- OVERVIEW TAB ----------------
+        overview_tab = QWidget()
+        overview_tab.setStyleSheet("""
+            QWidget {
+                background-color: #F8F6EA;
+            }
+        """)
 
-            overview_layout = QVBoxLayout(overview_tab)
-            overview_layout.setContentsMargins(10, 10, 10, 10)
-            overview_layout.setSpacing(10)
+        overview_layout = QVBoxLayout(overview_tab)
+        overview_layout.setContentsMargins(10, 10, 10, 10)
+        overview_layout.setSpacing(10)
 
-            details.setStyleSheet("""
-                QLabel {
+        details.setStyleSheet("""
+            QLabel {
+                background-color: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #E9DEBA;
+                border-radius: 8px;
+                padding: 15px;
+                font-size: 13px;
+            }
+        """)
+
+        overview_layout.addWidget(details)
+        overview_layout.addStretch()
+
+        tabs.addTab(overview_tab, "Overview")
+
+
+
+        # ---------------- ATTENDANCE TAB ----------------
+        attendance_tab = QWidget()
+        attendance_tab.setStyleSheet("""
+            QWidget {
+                background-color: #F8F6EA;
+            }
+        """)
+
+        attendance_layout = QVBoxLayout(attendance_tab)
+        attendance_layout.setContentsMargins(10, 10, 10, 10)
+        attendance_layout.setSpacing(12)
+
+        attendance_title = QLabel("Attendance History")
+        attendance_title.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                background: transparent;
+                font-size: 18px;
+                font-weight: 700;
+            }
+        """)
+        attendance_summary_layout = QHBoxLayout()
+        attendance_summary_layout.setSpacing(10)
+
+        total_label = QLabel("0")
+        present_label = QLabel("0")
+        absent_label = QLabel("0")
+        late_label = QLabel("0")
+        percentage_label = QLabel("0.0%")
+
+        # -------------test_result tab-------------------------------
+
+        results_tab = QWidget()
+        results_tab.setStyleSheet("""
+            QWidget {
+                background-color: #F8F6EA;
+            }
+        """)
+
+        results_layout = QVBoxLayout(results_tab)
+        results_layout.setContentsMargins(10, 10, 10, 10)
+        results_layout.setSpacing(12)
+
+        results_title = QLabel("Test Results")
+        results_title.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                background: transparent;
+                font-size: 18px;
+                font-weight: 700;
+            }
+        """)
+
+        results_layout.addWidget(results_title)
+        test_summary_layout = QHBoxLayout()
+        test_summary_layout.setSpacing(10)
+
+        tests_label = QLabel("0")
+        average_label = QLabel("0.0%")
+        highest_label = QLabel("0.0%")
+        lowest_label = QLabel("0.0%")
+
+
+        def create_result_summary_card(title, value_label):
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
                     background-color: #FEFEFE;
-                    color: #012D54;
                     border: 1px solid #E9DEBA;
                     border-radius: 8px;
-                    padding: 15px;
-                    font-size: 13px;
                 }
             """)
 
-            overview_layout.addWidget(details)
-            overview_layout.addStretch()
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 10, 12, 10)
+            card_layout.setSpacing(3)
 
-            tabs.addTab(overview_tab, "Overview")
-
-
-
-            # ---------------- ATTENDANCE TAB ----------------
-            attendance_tab = QWidget()
-            attendance_tab.setStyleSheet("""
-                QWidget {
-                    background-color: #F8F6EA;
-                }
-            """)
-
-            attendance_layout = QVBoxLayout(attendance_tab)
-            attendance_layout.setContentsMargins(10, 10, 10, 10)
-            attendance_layout.setSpacing(12)
-
-            attendance_title = QLabel("Attendance History")
-            attendance_title.setStyleSheet("""
+            title_label = QLabel(title)
+            title_label.setStyleSheet("""
                 QLabel {
-                    color: #012D54;
-                    background: transparent;
-                    font-size: 18px;
-                    font-weight: 700;
-                }
-            """)
-            attendance_summary_layout = QHBoxLayout()
-            attendance_summary_layout.setSpacing(10)
-
-            total_label = QLabel("0")
-            present_label = QLabel("0")
-            absent_label = QLabel("0")
-            late_label = QLabel("0")
-            percentage_label = QLabel("0.0%")
-
-            # -------------test_result tab-------------------------------
-
-            results_tab = QWidget()
-            results_tab.setStyleSheet("""
-                QWidget {
-                    background-color: #F8F6EA;
-                }
-            """)
-
-            results_layout = QVBoxLayout(results_tab)
-            results_layout.setContentsMargins(10, 10, 10, 10)
-            results_layout.setSpacing(12)
-
-            results_title = QLabel("Test Results")
-            results_title.setStyleSheet("""
-                QLabel {
-                    color: #012D54;
-                    background: transparent;
-                    font-size: 18px;
-                    font-weight: 700;
-                }
-            """)
-
-            results_layout.addWidget(results_title)
-            test_summary_layout = QHBoxLayout()
-            test_summary_layout.setSpacing(10)
-
-            tests_label = QLabel("0")
-            average_label = QLabel("0.0%")
-            highest_label = QLabel("0.0%")
-            lowest_label = QLabel("0.0%")
-
-
-            def create_result_summary_card(title, value_label):
-                card = QFrame()
-                card.setStyleSheet("""
-                    QFrame {
-                        background-color: #FEFEFE;
-                        border: 1px solid #E9DEBA;
-                        border-radius: 8px;
-                    }
-                """)
-
-                card_layout = QVBoxLayout(card)
-                card_layout.setContentsMargins(12, 10, 12, 10)
-                card_layout.setSpacing(3)
-
-                title_label = QLabel(title)
-                title_label.setStyleSheet("""
-                    QLabel {
-                        color: #615F4B;
-                        background: transparent;
-                        font-size: 11px;
-                        font-weight: 600;
-                    }
-                """)
-
-                value_label.setStyleSheet("""
-                    QLabel {
-                        color: #012D54;
-                        background: transparent;
-                        font-size: 20px;
-                        font-weight: 700;
-                    }
-                """)
-
-                card_layout.addWidget(title_label)
-                card_layout.addWidget(value_label)
-
-                return card
-
-
-            test_summary_layout.addWidget(
-                create_result_summary_card(
-                    "Tests Taken",
-                    tests_label,
-                )
-            )
-
-            test_summary_layout.addWidget(
-                create_result_summary_card(
-                    "Average",
-                    average_label,
-                )
-            )
-
-            test_summary_layout.addWidget(
-                create_result_summary_card(
-                    "Highest",
-                    highest_label,
-                )
-            )
-
-            test_summary_layout.addWidget(
-                create_result_summary_card(
-                    "Lowest",
-                    lowest_label,
-                )
-            )
-
-            results_layout.addLayout(test_summary_layout)
-            results_table = QTableWidget()
-            results_table.setColumnCount(5)
-            results_table.setHorizontalHeaderLabels([
-                "Test",
-                "Date",
-                "Marks",
-                "Percentage",
-                "Remarks",
-            ])
-
-            results_table.setEditTriggers(
-                QTableWidget.EditTrigger.NoEditTriggers
-            )
-
-            results_table.setSelectionBehavior(
-                QTableWidget.SelectionBehavior.SelectRows
-            )
-
-            results_table.verticalHeader().setVisible(False)
-            results_table.horizontalHeader().setStretchLastSection(True)
-            results_table.verticalHeader().setDefaultSectionSize(40)
-
-            results_table.setStyleSheet("""
-                QTableWidget {
-                    background-color: #FEFEFE;
-                    color: #1F2937;
-                    border: 1px solid #E9DEBA;
-                    border-radius: 8px;
-                    gridline-color: #E9DEBA;
-                    font-size: 13px;
-                }
-
-                QTableWidget::item {
-                    padding: 8px;
-                }
-
-                QTableWidget::item:selected {
-                    background-color: #E9DEBA;
-                    color: #012D54;
-                }
-
-                QHeaderView::section {
-                    background-color: #012D54;
-                    color: #FEFEFE;
-                    padding: 9px;
-                    border: none;
-                    font-weight: 600;
-                }
-            """)
-
-            results_layout.addWidget(results_table)
-
-            tabs.addTab(results_tab, "Results")
-            self.load_student_results(
-                student.id,
-                results_table,
-                tests_label,
-                average_label,
-                highest_label,
-                lowest_label,
-            )
-
-
-            def create_summary_card(title, value_label):
-                card = QFrame()
-                card.setStyleSheet("""
-                    QFrame {
-                        background-color: #FEFEFE;
-                        border: 1px solid #E9DEBA;
-                        border-radius: 8px;
-                    }
-                """)
-
-                card_layout = QVBoxLayout(card)
-                card_layout.setContentsMargins(12, 10, 12, 10)
-                card_layout.setSpacing(3)
-
-                title_label = QLabel(title)
-                title_label.setStyleSheet("""
                     color: #615F4B;
                     background: transparent;
                     font-size: 11px;
                     font-weight: 600;
-                """)
+                }
+            """)
 
-                value_label.setStyleSheet("""
+            value_label.setStyleSheet("""
+                QLabel {
                     color: #012D54;
                     background: transparent;
                     font-size: 20px;
                     font-weight: 700;
-                """)
+                }
+            """)
 
-                card_layout.addWidget(title_label)
-                card_layout.addWidget(value_label)
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
 
-                return card
+            return card
 
 
-            attendance_summary_layout.addWidget(
-                create_summary_card("Total Days", total_label)
+        test_summary_layout.addWidget(
+            create_result_summary_card(
+                "Tests Taken",
+                tests_label,
             )
-            attendance_summary_layout.addWidget(
-                create_summary_card("Present", present_label)
+        )
+
+        test_summary_layout.addWidget(
+            create_result_summary_card(
+                "Average",
+                average_label,
             )
-            attendance_summary_layout.addWidget(
-                create_summary_card("Absent", absent_label)
+        )
+
+        test_summary_layout.addWidget(
+            create_result_summary_card(
+                "Highest",
+                highest_label,
             )
-            attendance_summary_layout.addWidget(
-                create_summary_card("Late", late_label)
+        )
+
+        test_summary_layout.addWidget(
+            create_result_summary_card(
+                "Lowest",
+                lowest_label,
             )
-            attendance_summary_layout.addWidget(
-                create_summary_card("Attendance", percentage_label)
-            )
+        )
 
-            attendance_layout.addLayout(attendance_summary_layout)
-            
+        results_layout.addLayout(test_summary_layout)
+        results_table = QTableWidget()
+        results_table.setColumnCount(5)
+        results_table.setHorizontalHeaderLabels([
+            "Test",
+            "Date",
+            "Marks",
+            "Percentage",
+            "Remarks",
+        ])
 
-            attendance_layout.addWidget(attendance_title)
+        results_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
 
-            attendance_table = QTableWidget()
-            
-            attendance_table.setColumnCount(2)
+        results_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
 
-            attendance_table.setHorizontalHeaderLabels([
-                "Date",
-                "Status",
-            ])
+        results_table.verticalHeader().setVisible(False)
+        results_table.horizontalHeader().setStretchLastSection(True)
+        results_table.verticalHeader().setDefaultSectionSize(40)
 
-            attendance_table.setEditTriggers(
-                QTableWidget.EditTrigger.NoEditTriggers
-            )
+        results_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #FEFEFE;
+                color: #1F2937;
+                border: 1px solid #E9DEBA;
+                border-radius: 8px;
+                gridline-color: #E9DEBA;
+                font-size: 13px;
+            }
 
-            attendance_table.setSelectionBehavior(
-                QTableWidget.SelectionBehavior.SelectRows
-            )
+            QTableWidget::item {
+                padding: 8px;
+            }
 
-            attendance_table.verticalHeader().setVisible(False)
+            QTableWidget::item:selected {
+                background-color: #E9DEBA;
+                color: #012D54;
+            }
 
-            attendance_table.horizontalHeader().setStretchLastSection(True)
+            QHeaderView::section {
+                background-color: #012D54;
+                color: #FEFEFE;
+                padding: 9px;
+                border: none;
+                font-weight: 600;
+            }
+        """)
 
-            attendance_table.verticalHeader().setDefaultSectionSize(40)
+        results_layout.addWidget(results_table)
 
-            attendance_table.setStyleSheet("""
-                QTableWidget {
+        tabs.addTab(results_tab, "Results")
+        self.load_student_results(
+            student_id,
+            results_table,
+            tests_label,
+            average_label,
+            highest_label,
+            lowest_label,
+        )
+
+
+        def create_summary_card(title, value_label):
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
                     background-color: #FEFEFE;
-                    color: #1F2937;
                     border: 1px solid #E9DEBA;
                     border-radius: 8px;
-                    gridline-color: #E9DEBA;
-                    font-size: 13px;
                 }
+            """)
 
-                QTableWidget::item {
-                    padding: 8px;
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 10, 12, 10)
+            card_layout.setSpacing(3)
+
+            title_label = QLabel(title)
+            title_label.setStyleSheet("""
+                color: #615F4B;
+                background: transparent;
+                font-size: 11px;
+                font-weight: 600;
+            """)
+
+            value_label.setStyleSheet("""
+                color: #012D54;
+                background: transparent;
+                font-size: 20px;
+                font-weight: 700;
+            """)
+
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
+
+            return card
+
+
+        attendance_summary_layout.addWidget(
+            create_summary_card("Total Days", total_label)
+        )
+        attendance_summary_layout.addWidget(
+            create_summary_card("Present", present_label)
+        )
+        attendance_summary_layout.addWidget(
+            create_summary_card("Absent", absent_label)
+        )
+        attendance_summary_layout.addWidget(
+            create_summary_card("Late", late_label)
+        )
+        attendance_summary_layout.addWidget(
+            create_summary_card("Attendance", percentage_label)
+        )
+
+        attendance_layout.addLayout(attendance_summary_layout)
+        
+
+        attendance_layout.addWidget(attendance_title)
+
+        attendance_table = QTableWidget()
+        
+        attendance_table.setColumnCount(2)
+
+        attendance_table.setHorizontalHeaderLabels([
+            "Date",
+            "Status",
+        ])
+
+        attendance_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+
+        attendance_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+
+        attendance_table.verticalHeader().setVisible(False)
+
+        attendance_table.horizontalHeader().setStretchLastSection(True)
+
+        attendance_table.verticalHeader().setDefaultSectionSize(40)
+
+        attendance_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #FEFEFE;
+                color: #1F2937;
+                border: 1px solid #E9DEBA;
+                border-radius: 8px;
+                gridline-color: #E9DEBA;
+                font-size: 13px;
+            }
+
+            QTableWidget::item {
+                padding: 8px;
+            }
+
+            QTableWidget::item:selected {
+                background-color: #E9DEBA;
+                color: #012D54;
+            }
+
+            QHeaderView::section {
+                background-color: #012D54;
+                color: #FEFEFE;
+                padding: 9px;
+                border: none;
+                font-weight: 600;
+            }
+        """)
+
+        attendance_layout.addWidget(attendance_table)
+        self.load_student_attendance(
+            student_id,
+            attendance_table,
+            total_label,
+            present_label,
+            absent_label,
+            late_label,
+            percentage_label,
+        )
+
+        tabs.addTab(attendance_tab, "Attendance")
+        # Fees Tab
+        fees_tab = QWidget()
+        fees_tab.setStyleSheet("""
+            QWidget {
+                background-color: #F8F6EA;
+            }
+        """)
+
+        fees_layout = QVBoxLayout(fees_tab)
+        fees_layout.setContentsMargins(10, 10, 10, 10)
+        fees_layout.setSpacing(12)
+
+        fees_title = QLabel("Fee Summary")
+        fees_title.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                background: transparent;
+                font-size: 18px;
+                font-weight: 700;
+            }
+        """)
+
+        fees_layout.addWidget(fees_title)
+
+        fees_summary_layout = QHBoxLayout()
+        fees_summary_layout.setSpacing(10)
+
+        total_due_label = QLabel("₹0.00")
+        total_paid_label = QLabel("₹0.00")
+        outstanding_label = QLabel("₹0.00")
+
+
+        def create_fee_summary_card(title, value_label):
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
+                    background-color: #FEFEFE;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 8px;
                 }
+            """)
 
-                QTableWidget::item:selected {
-                    background-color: #E9DEBA;
-                    color: #012D54;
-                }
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 10, 12, 10)
+            card_layout.setSpacing(3)
 
-                QHeaderView::section {
-                    background-color: #012D54;
-                    color: #FEFEFE;
-                    padding: 9px;
-                    border: none;
+            title_label = QLabel(title)
+            title_label.setStyleSheet("""
+                QLabel {
+                    color: #615F4B;
+                    background: transparent;
+                    font-size: 11px;
                     font-weight: 600;
                 }
             """)
 
-            attendance_layout.addWidget(attendance_table)
-            self.load_student_attendance(
-                student.id,
-                attendance_table,
-                total_label,
-                present_label,
-                absent_label,
-                late_label,
-                percentage_label,
-            )
-
-            tabs.addTab(attendance_tab, "Attendance")
-            # Fees Tab
-            fees_tab = QWidget()
-            fees_tab.setStyleSheet("""
-                QWidget {
-                    background-color: #F8F6EA;
-                }
-            """)
-
-            fees_layout = QVBoxLayout(fees_tab)
-            fees_layout.setContentsMargins(10, 10, 10, 10)
-            fees_layout.setSpacing(12)
-
-            fees_title = QLabel("Fee Summary")
-            fees_title.setStyleSheet("""
+            value_label.setStyleSheet("""
                 QLabel {
                     color: #012D54;
                     background: transparent;
-                    font-size: 18px;
+                    font-size: 20px;
                     font-weight: 700;
                 }
             """)
 
-            fees_layout.addWidget(fees_title)
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
 
-            fees_summary_layout = QHBoxLayout()
-            fees_summary_layout.setSpacing(10)
-
-            total_due_label = QLabel("₹0.00")
-            total_paid_label = QLabel("₹0.00")
-            outstanding_label = QLabel("₹0.00")
+            return card
 
 
-            def create_fee_summary_card(title, value_label):
-                card = QFrame()
-                card.setStyleSheet("""
-                    QFrame {
-                        background-color: #FEFEFE;
-                        border: 1px solid #E9DEBA;
-                        border-radius: 8px;
-                    }
-                """)
-
-                card_layout = QVBoxLayout(card)
-                card_layout.setContentsMargins(12, 10, 12, 10)
-                card_layout.setSpacing(3)
-
-                title_label = QLabel(title)
-                title_label.setStyleSheet("""
-                    QLabel {
-                        color: #615F4B;
-                        background: transparent;
-                        font-size: 11px;
-                        font-weight: 600;
-                    }
-                """)
-
-                value_label.setStyleSheet("""
-                    QLabel {
-                        color: #012D54;
-                        background: transparent;
-                        font-size: 20px;
-                        font-weight: 700;
-                    }
-                """)
-
-                card_layout.addWidget(title_label)
-                card_layout.addWidget(value_label)
-
-                return card
-
-
-            fees_summary_layout.addWidget(
-                create_fee_summary_card(
-                    "Total Due",
-                    total_due_label,
-                )
-            )
-
-            fees_summary_layout.addWidget(
-                create_fee_summary_card(
-                    "Total Paid",
-                    total_paid_label,
-                )
-            )
-
-            fees_summary_layout.addWidget(
-                create_fee_summary_card(
-                    "Outstanding",
-                    outstanding_label,
-                )
-            )
-
-            fees_layout.addLayout(fees_summary_layout)
-
-            tabs.addTab(fees_tab, "Fees")
-            self.load_student_fee_summary(
-                student.id,
+        fees_summary_layout.addWidget(
+            create_fee_summary_card(
+                "Total Due",
                 total_due_label,
+            )
+        )
+
+        fees_summary_layout.addWidget(
+            create_fee_summary_card(
+                "Total Paid",
                 total_paid_label,
-                outstanding_label
             )
+        )
 
-
-            # ---------------- TAB WIDGET STYLE ----------------
-            tabs.setStyleSheet("""
-                QTabWidget::pane {
-                    border: 1px solid #E9DEBA;
-                    border-radius: 8px;
-                    background-color: #F8F6EA;
-                    top: -1px;
-                }
-
-                QTabBar::tab {
-                    background-color: #E9DEBA;
-                    color: #012D54;
-                    padding: 8px 18px;
-                    margin-right: 2px;
-                    border-top-left-radius: 6px;
-                    border-top-right-radius: 6px;
-                    font-size: 13px;
-                    font-weight: 600;
-                }
-
-                QTabBar::tab:selected {
-                    background-color: #012D54;
-                    color: #FEFEFE;
-                }
-
-                QTabBar::tab:hover {
-                    background-color: #D9B85F;
-                    color: #012D54;
-                }
-            """)
-
-            layout.addWidget(tabs)
-            layout.addStretch()
-            layout.addStretch()
-            # Close button
-            close_button = QPushButton("Close")
-            close_button.setFixedWidth(100)
-            close_button.setCursor(
-                Qt.CursorShape.PointingHandCursor
+        fees_summary_layout.addWidget(
+            create_fee_summary_card(
+                "Outstanding",
+                outstanding_label,
             )
+        )
 
-            close_button.clicked.connect(dialog.accept)
+        fees_layout.addLayout(fees_summary_layout)
 
-            layout.addWidget(
-                close_button,
-                alignment=Qt.AlignmentFlag.AlignRight,
-            )
+        tabs.addTab(fees_tab, "Fees")
+        self.load_student_fee_summary(
+            student_id,
+            total_due_label,
+            total_paid_label,
+            outstanding_label
+        )
 
-            dialog.setStyleSheet("""
-                QDialog {
-                    background: #F8F6EA;
-                }
 
-                #studentProfileTitle {
-                    color: #012D54;
-                    font-size: 24px;
-                    font-weight: 700;
-                }
+        # ---------------- TAB WIDGET STYLE ----------------
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #E9DEBA;
+                border-radius: 8px;
+                background-color: #F8F6EA;
+                top: -1px;
+            }
 
-                #studentProfileSubtitle {
-                    color: #615F4B;
-                    font-size: 13px;
-                }
+            QTabBar::tab {
+                background-color: #E9DEBA;
+                color: #012D54;
+                padding: 8px 18px;
+                margin-right: 2px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
+            }
 
-                QLabel {
-                    color: #1F2937;
-                    font-size: 13px;
-                }
+            QTabBar::tab:selected {
+                background-color: #012D54;
+                color: #FEFEFE;
+            }
 
-                QPushButton {
-                    background: #012D54;
-                    color: #FEFEFE;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 20px;
-                    font-weight: 600;
-                }
+            QTabBar::tab:hover {
+                background-color: #D9B85F;
+                color: #012D54;
+            }
+        """)
 
-                QPushButton:hover {
-                    background: #04294D;
-                }
+        layout.addWidget(tabs)
+        layout.addStretch()
+        layout.addStretch()
+        # Close button
+        close_button = QPushButton("Close")
+        close_button.setFixedWidth(100)
+        close_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
 
-                QPushButton:pressed {
-                    background: #001F3A;
-                }
-            """)
+        close_button.clicked.connect(dialog.accept)
 
-            dialog.exec()
+        layout.addWidget(
+            close_button,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+
+        dialog.setStyleSheet("""
+            QDialog {
+                background: #F8F6EA;
+            }
+
+            #studentProfileTitle {
+                color: #012D54;
+                font-size: 24px;
+                font-weight: 700;
+            }
+
+            #studentProfileSubtitle {
+                color: #615F4B;
+                font-size: 13px;
+            }
+
+            QLabel {
+                color: #1F2937;
+                font-size: 13px;
+            }
+
+            QPushButton {
+                background: #012D54;
+                color: #FEFEFE;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 20px;
+                font-weight: 600;
+            }
+
+            QPushButton:hover {
+                background: #04294D;
+            }
+
+            QPushButton:pressed {
+                background: #001F3A;
+            }
+        """)
+
+        dialog.exec()
     def load_student_attendance(
         self,
         student_id,
@@ -2968,25 +2951,23 @@ QDialog QLabel{{
 
         return page
     def is_batch_class_day(self, batch, selected_date):
-        day_name = selected_date.strftime("%A")
+        if not batch or not batch.days:
+            return False
+
+        full_day = selected_date.strftime("%A").lower()
+        short_day = selected_date.strftime("%a").lower()
 
         class_days = [
-            day.strip()
+            day.strip().lower()
             for day in batch.days.split(",")
+            if day.strip()
         ]
 
-        return day_name in class_days
-    
-    
+        return full_day in class_days or short_day in class_days
+
     def load_attendance_students(self):
         selected_batch_id = self.batch_selector.currentData()
         selected_date = (
-            self.attendance_date_picker.date().toPyDate()
-        )
-        
-        
-
-        attendance_date = (
             self.attendance_date_picker.date().toPyDate()
         )
 
@@ -2998,25 +2979,24 @@ QDialog QLabel{{
 
             existing_attendance = get_attendance_by_date(
                 session,
-                attendance_date,
+                selected_date,
                 batch_id=selected_batch_id,
             )
 
             selected_batch = None
+            attendance_override = None
 
             if selected_batch_id is not None:
                 selected_batch = session.get(
                     Batch,
                     selected_batch_id,
                 )
-                attendance_override = None
-
-            if selected_batch_id is not None:
                 attendance_override = get_attendance_override(
                     session,
                     batch_id=selected_batch_id,
                     override_date=selected_date,
                 )
+
             if (
                 selected_batch is not None
                 and not self.is_batch_class_day(
@@ -3024,7 +3004,6 @@ QDialog QLabel{{
                     selected_date,
                 )
                 and attendance_override is None
-                
             ):
                 self.attendance_table.setRowCount(0)
                 self.attendance_status = {}
@@ -3252,46 +3231,45 @@ QDialog QLabel{{
         attendance_date = (
             self.attendance_date_picker.date().toPyDate()
         )
+
         with SessionLocal() as session:
             selected_batch = session.get(
                 Batch,
                 batch_id,
             )
 
-        if selected_batch is None:
-            QMessageBox.warning(
-                self,
-                "Batch Not Found",
-                "The selected batch could not be found."
-            )
-            return
-        with SessionLocal() as session:
+            if selected_batch is None:
+                QMessageBox.warning(
+                    self,
+                    "Batch Not Found",
+                    "The selected batch could not be found."
+                )
+                return
+
             attendance_override = get_attendance_override(
                 session,
                 batch_id=batch_id,
                 override_date=attendance_date,
             )
 
-        if (
-            not self.is_batch_class_day(
-                selected_batch,
-                attendance_date,
-            )
-            and attendance_override is None
-        ):
-            QMessageBox.warning(
-                self,
-                "No Class Today",
-                (
-                    f"{selected_batch.name} does not have a class "
-                    f"on {attendance_date.strftime('%A')}."
-                ),
-            )
-            return
+            if (
+                not self.is_batch_class_day(
+                    selected_batch,
+                    attendance_date,
+                )
+                and attendance_override is None
+            ):
+                QMessageBox.warning(
+                    self,
+                    "No Class Today",
+                    (
+                        f"{selected_batch.name} does not have a class "
+                        f"on {attendance_date.strftime('%A')}."
+                    ),
+                )
+                return
 
-       
-
-        if not hasattr(self, "attendance_status"):
+        if not hasattr(self, "attendance_status") or not self.attendance_status:
             QMessageBox.warning(
                 self,
                 "Attendance",
@@ -3314,23 +3292,22 @@ QDialog QLabel{{
             return
 
         with SessionLocal() as session:
-            for student_id, status in self.attendance_status.items():
-                mark_attendance(
-                    session,
-                    student_id=student_id,
-                    batch_id=batch_id,
-                    attendance_date=attendance_date,
-                    status=status,
-                )
+            saved_count = save_batch_attendance(
+                session,
+                batch_id=batch_id,
+                attendance_date=attendance_date,
+                attendance_records=self.attendance_status,
+            )
 
         QMessageBox.information(
             self,
             "Attendance Saved",
             f"Attendance for {attendance_date.strftime('%d %B %Y')} "
-            "has been saved successfully."
+            f"has been saved successfully ({saved_count} student{'s' if saved_count != 1 else ''})."
         )
 
         self.refresh_dashboard()
+
     def override_attendance_day(self):
         batch_id = self.batch_selector.currentData()
 
@@ -3360,6 +3337,8 @@ QDialog QLabel{{
                 )
                 return
 
+            batch_name = batch.name
+
             existing_override = get_attendance_override(
                 session,
                 batch_id=batch_id,
@@ -3377,22 +3356,23 @@ QDialog QLabel{{
                 )
                 return
 
-            result = QMessageBox.question(
-                self,
-                "Override Class Day",
-                (
-                    f"{override_date.strftime('%A, %d %B %Y')} "
-                    f"is not a scheduled class day for {batch.name}.\n\n"
-                    "Do you want to mark this date as an extra class day?"
-                ),
-                QMessageBox.StandardButton.Yes
-                | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Cancel,
-            )
+        result = QMessageBox.question(
+            self,
+            "Override Class Day",
+            (
+                f"{override_date.strftime('%A, %d %B %Y')} "
+                f"is not a scheduled class day for {batch_name}.\n\n"
+                "Do you want to mark this date as an extra class day?"
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
 
-            if result != QMessageBox.StandardButton.Yes:
-                return
+        if result != QMessageBox.StandardButton.Yes:
+            return
 
+        with SessionLocal() as session:
             create_attendance_override(
                 session,
                 batch_id=batch_id,

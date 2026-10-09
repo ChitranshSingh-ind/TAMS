@@ -44,6 +44,58 @@ def mark_attendance(
     session.refresh(attendance)
 
     return attendance
+
+
+def save_batch_attendance(
+    session: Session,
+    *,
+    batch_id: int,
+    attendance_date: date,
+    attendance_records: dict[int, str],
+) -> int:
+    """
+    Save or update attendance for all students in a batch in a single atomic transaction.
+    attendance_records maps student_id -> status ('PRESENT', 'ABSENT', etc.).
+    """
+    if not attendance_records:
+        return 0
+
+    student_ids = list(attendance_records.keys())
+    existing_statement = (
+        select(Attendance)
+        .where(
+            Attendance.batch_id == batch_id,
+            Attendance.date == attendance_date,
+            Attendance.student_id.in_(student_ids),
+        )
+    )
+    existing_records = {
+        record.student_id: record
+        for record in session.scalars(existing_statement).all()
+    }
+
+    saved_count = 0
+    for student_id, status in attendance_records.items():
+        if status is None:
+            continue
+
+        record = existing_records.get(student_id)
+        if record is None:
+            record = Attendance(
+                student_id=student_id,
+                batch_id=batch_id,
+                date=attendance_date,
+                status=status,
+            )
+            session.add(record)
+        else:
+            record.status = status
+        saved_count += 1
+
+    session.commit()
+    return saved_count
+
+
 def get_attendance_by_date(
     session: Session,
     attendance_date: date,

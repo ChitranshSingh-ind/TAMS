@@ -1,5 +1,5 @@
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database.models.student import Student
 from app.database.models.parent import Parent
@@ -43,7 +43,15 @@ def get_student(
     session: Session,
     student_id: int,
 ) -> Student | None:
-    return session.get(Student, student_id)
+    statement = (
+        select(Student)
+        .options(
+            joinedload(Student.parent),
+            joinedload(Student.batch),
+        )
+        .where(Student.id == student_id)
+    )
+    return session.scalar(statement)
 
 
 def get_students_by_batch(
@@ -53,7 +61,13 @@ def get_students_by_batch(
     include_inactive: bool = False,
 ) -> list[Student]:
 
-    statement = select(Student)
+    statement = (
+        select(Student)
+        .options(
+            joinedload(Student.parent),
+            joinedload(Student.batch),
+        )
+    )
 
     if batch_id is not None:
         statement = statement.where(
@@ -70,7 +84,7 @@ def get_students_by_batch(
         Student.last_name,
     )
 
-    return list(session.scalars(statement).all())
+    return list(session.scalars(statement).unique().all())
 
 def count_students(session: Session, batch_id: int | None = None) -> int:
     statement = (select(func.count(Student.id)).where(Student.status == "ACTIVE"))
@@ -188,4 +202,84 @@ def create_student_with_parent(
     session.commit()
     session.refresh(student)
 
+    return student
+
+
+def update_student_with_parent(
+    session: Session,
+    student_id: int,
+    *,
+    admission_number: str | None,
+    first_name: str,
+    last_name: str | None = None,
+    parent_name: str | None = None,
+    parent_phone: str | None = None,
+    whatsapp_number: str | None = None,
+    batch_id: int,
+    date_of_birth=None,
+    school_name: str | None = None,
+    admission_date=None,
+    status: str = "ACTIVE",
+    notes: str | None = None,
+) -> Student | None:
+    student = session.get(Student, student_id)
+    if student is None:
+        return None
+
+    # Check duplicate admission number if changing
+    if admission_number and admission_number != student.admission_number:
+        existing_student = session.scalar(
+            select(Student).where(
+                Student.admission_number == admission_number,
+                Student.id != student_id,
+            )
+        )
+        if existing_student:
+            raise ValueError(
+                "A student with this admission number already exists."
+            )
+
+    student.admission_number = admission_number.strip() if admission_number else None
+    student.first_name = first_name.strip()
+    student.last_name = last_name.strip() if last_name else None
+    student.batch_id = batch_id
+    student.date_of_birth = date_of_birth
+    student.school_name = school_name.strip() if school_name else None
+    student.admission_date = admission_date
+    student.status = status
+    student.notes = notes.strip() if notes else None
+
+    # Update or create parent
+    if parent_name:
+        clean_parent_name = parent_name.strip()
+        clean_phone = parent_phone.strip() if parent_phone else None
+        clean_whatsapp = whatsapp_number.strip() if whatsapp_number else None
+
+        if student.parent_id:
+            parent = session.get(Parent, student.parent_id)
+            if parent:
+                parent.name = clean_parent_name
+                parent.phone = clean_phone
+                parent.whatsapp_number = clean_whatsapp
+            else:
+                parent = Parent(
+                    name=clean_parent_name,
+                    phone=clean_phone,
+                    whatsapp_number=clean_whatsapp,
+                )
+                session.add(parent)
+                session.flush()
+                student.parent_id = parent.id
+        else:
+            parent = Parent(
+                name=clean_parent_name,
+                phone=clean_phone,
+                whatsapp_number=clean_whatsapp,
+            )
+            session.add(parent)
+            session.flush()
+            student.parent_id = parent.id
+
+    session.commit()
+    session.refresh(student)
     return student

@@ -75,6 +75,61 @@ def count_upcoming_tests(
             batch_id=batch_id,
         )
     )
+def save_test_results(
+    session: Session,
+    *,
+    test_id: int,
+    entries: list[dict],
+) -> int:
+    test = session.get(TestModel, test_id)
+    if test is None:
+        raise ValueError("The selected test no longer exists.")
+
+    saved_count = 0
+
+    for entry in entries:
+        student_id = int(entry["student_id"])
+        marks = int(entry["marks"])
+        remarks = str(entry.get("remarks", "")).strip() or None
+
+        if marks < 0 or marks > test.max_marks:
+            raise ValueError(
+                f"Marks must be between 0 and {test.max_marks}."
+            )
+
+        from app.database.models.student import Student
+
+        student = session.get(Student, student_id)
+        if student is None or student.batch_id != test.batch_id:
+            raise ValueError(
+                "A selected student does not belong to this test's batch."
+            )
+
+        existing = session.scalar(
+            select(TestResult).where(
+                TestResult.test_id == test_id,
+                TestResult.student_id == student_id,
+            )
+        )
+
+        if existing is None:
+            existing = TestResult(
+                test_id=test_id,
+                student_id=student_id,
+                marks=marks,
+                remarks=remarks,
+            )
+            session.add(existing)
+        else:
+            existing.marks = marks
+            existing.remarks = remarks
+
+        saved_count += 1
+
+    session.commit()
+    return saved_count
+
+
 def get_test_results(
     session: Session,
     test_id: int,

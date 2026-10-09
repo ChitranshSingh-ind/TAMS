@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database.models.test import TestModel
 from app.database.models.test_result import TestResult
+from app.database.models.student import Student
 
 
 def create_test(

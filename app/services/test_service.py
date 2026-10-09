@@ -104,6 +104,13 @@ def save_test_results(
                 "A selected student does not belong to this test's batch."
             )
 
+        if student.status != "ACTIVE":
+            raise ValueError(
+                f"Results can only be entered or edited for active students. "
+                f"{student.first_name} {student.last_name or ''} is "
+                f"{student.status.lower()}."
+            )
+
         existing = session.scalar(
             select(TestResult).where(
                 TestResult.test_id == test_id,

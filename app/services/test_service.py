@@ -1,7 +1,7 @@
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database.models.test import TestModel
 from app.database.models.test_result import TestResult
@@ -147,6 +147,7 @@ def get_student_results(
 ):
     statement = (
         select(TestResult)
+        .options(joinedload(TestResult.test))
         .join(TestModel, TestResult.test_id == TestModel.id)
         .where(TestResult.student_id == student_id)
         .order_by(TestModel.test_date.desc())

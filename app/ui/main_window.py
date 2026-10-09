@@ -1049,7 +1049,13 @@ QDialog QLabel{{
         for row_index, values in enumerate(student_rows):
             student_id, admission_number, student_name, marks, remarks = values
             admission_item = QTableWidgetItem(admission_number)
+            admission_item.setFlags(
+                admission_item.flags() & ~Qt.ItemFlag.ItemIsEditable
+            )
             name_item = QTableWidgetItem(student_name)
+            name_item.setFlags(
+                name_item.flags() & ~Qt.ItemFlag.ItemIsEditable
+            )
             name_item.setData(Qt.ItemDataRole.UserRole, student_id)
             results_table.setItem(row_index, 0, admission_item)
             results_table.setItem(row_index, 1, name_item)

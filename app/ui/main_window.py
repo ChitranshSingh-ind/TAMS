@@ -540,6 +540,9 @@ QDialog QLabel{{
         self.batch_selector.currentIndexChanged.connect(
     self.load_attendance_students
 )
+        self.batch_selector.currentIndexChanged.connect(
+            self.load_results_tests
+        )
         with SessionLocal() as session:
             batches = get_active_batches(session)
             for batch in batches:

@@ -886,12 +886,6 @@ QDialog QLabel{{
             f'"{test_name}" has been created successfully.',
         )
 
-title)
-        layout.addWidget(subtitle)
-        layout.addStretch()
-
-        return page
-
     def create_students_page(self):
         page = QWidget()
         page.setObjectName("studentsPage")

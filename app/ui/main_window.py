@@ -6,7 +6,7 @@ from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
 from app.services.student_service import count_students,  get_students_by_batch, create_student_with_parent, get_student, update_student
 from app.services.fee_service import get_outstanding_amount, get_student_fee_summary
-from app.services.test_service import count_upcoming_tests, get_student_results, create_test, get_tests, get_test_results
+from app.services.test_service import count_upcoming_tests, get_student_results, create_test, get_tests, get_test_results, save_test_results
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
 from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary, create_attendance_override, get_attendance_override
@@ -763,6 +763,32 @@ QDialog QLabel{{
         header_layout.addWidget(check_results_button)
         self.check_results_button = check_results_button
 
+        edit_results_button = QPushButton("Edit Results")
+        edit_results_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        edit_results_button.setFixedHeight(42)
+        edit_results_button.setEnabled(False)
+        edit_results_button.setStyleSheet("""
+            QPushButton {
+                background: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 8px;
+                padding: 10px 18px;
+                font-weight: 600;
+            }
+            QPushButton:hover:enabled {
+                background: #E9DEBA;
+            }
+            QPushButton:disabled {
+                color: #8B887A;
+                background: #F1EBD3;
+                border-color: #E9DEBA;
+            }
+        """)
+        edit_results_button.clicked.connect(self.edit_selected_test_results)
+        header_layout.addWidget(edit_results_button)
+        self.edit_results_button = edit_results_button
+
         layout.addLayout(header_layout)
 
         self.results_tests_table = QTableWidget()
@@ -847,9 +873,9 @@ QDialog QLabel{{
                 )
 
     def update_check_results_button(self):
-        self.check_results_button.setEnabled(
-            self.results_tests_table.currentRow() >= 0
-        )
+        has_selection = self.results_tests_table.currentRow() >= 0
+        self.check_results_button.setEnabled(has_selection)
+        self.edit_results_button.setEnabled(has_selection)
 
     def check_selected_test_results(self):
         selected_row = self.results_tests_table.currentRow()
@@ -933,6 +959,175 @@ QDialog QLabel{{
         layout.addWidget(close_button)
 
         dialog.exec()
+
+    def edit_selected_test_results(self):
+        selected_row = self.results_tests_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.information(
+                self,
+                "Select a Test",
+                "Select a test from the table first.",
+            )
+            return
+
+        test_item = self.results_tests_table.item(selected_row, 0)
+        test_id = int(test_item.data(Qt.ItemDataRole.UserRole))
+        test_name = test_item.text()
+
+        with SessionLocal() as session:
+            test = session.get(
+                __import__("app.database.models.test", fromlist=["TestModel"]).TestModel,
+                test_id,
+            )
+            if test is None:
+                QMessageBox.warning(
+                    self,
+                    "Test Not Found",
+                    "This test could not be found. Refresh the Results page and try again.",
+                )
+                return
+
+            batch_id = test.batch_id
+            max_marks = test.max_marks
+            students = get_students_by_batch(
+                session,
+                batch_id=batch_id,
+            )
+            existing_results = get_test_results(session, test_id)
+            existing_by_student = {
+                result.student_id: result
+                for result in existing_results
+            }
+
+            student_rows = [
+                (
+                    student.id,
+                    student.admission_number or "-",
+                    f"{student.first_name} {student.last_name or ''}".strip(),
+                    str(existing_by_student[student.id].marks)
+                    if student.id in existing_by_student else "",
+                    existing_by_student[student.id].remarks or ""
+                    if student.id in existing_by_student else "",
+                )
+                for student in students
+            ]
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Edit Results — {test_name}")
+        dialog.resize(850, 520)
+        layout = QVBoxLayout(dialog)
+
+        heading = QLabel(
+            f"Enter or edit marks for {test_name} (maximum {max_marks})."
+        )
+        heading.setStyleSheet(
+            "color: #012D54; font-size: 17px; font-weight: 700;"
+        )
+        layout.addWidget(heading)
+
+        note = QLabel(
+            "Leave Marks blank to keep a student unchanged or skip a new result. "
+            "Enter 0 for a score of zero."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #615F4B; font-size: 12px;")
+        layout.addWidget(note)
+
+        results_table = QTableWidget()
+        results_table.setColumnCount(4)
+        results_table.setHorizontalHeaderLabels(
+            ["Admission No.", "Student", "Marks", "Remarks"]
+        )
+        results_table.setRowCount(len(student_rows))
+        results_table.verticalHeader().setVisible(False)
+        results_table.setAlternatingRowColors(True)
+        results_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        for row_index, values in enumerate(student_rows):
+            student_id, admission_number, student_name, marks, remarks = values
+            admission_item = QTableWidgetItem(admission_number)
+            name_item = QTableWidgetItem(student_name)
+            name_item.setData(Qt.ItemDataRole.UserRole, student_id)
+            results_table.setItem(row_index, 0, admission_item)
+            results_table.setItem(row_index, 1, name_item)
+            results_table.setItem(row_index, 2, QTableWidgetItem(marks))
+            results_table.setItem(row_index, 3, QTableWidgetItem(remarks))
+
+        layout.addWidget(results_table)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        entries = []
+        for row_index in range(results_table.rowCount()):
+            student_id = results_table.item(
+                row_index, 1
+            ).data(Qt.ItemDataRole.UserRole)
+            marks_text = results_table.item(row_index, 2).text().strip()
+            remarks = results_table.item(row_index, 3).text().strip()
+
+            if not marks_text:
+                continue
+
+            try:
+                marks = int(marks_text)
+            except ValueError:
+                QMessageBox.warning(
+                    self,
+                    "Invalid Marks",
+                    f"Enter a whole number for {results_table.item(row_index, 1).text()}.",
+                )
+                return
+
+            if marks < 0 or marks > max_marks:
+                QMessageBox.warning(
+                    self,
+                    "Marks Out of Range",
+                    f"Marks must be between 0 and {max_marks}.",
+                )
+                return
+
+            entries.append({
+                "student_id": student_id,
+                "marks": marks,
+                "remarks": remarks,
+            })
+
+        if not entries:
+            QMessageBox.information(
+                self,
+                "No Marks Entered",
+                "Enter marks for at least one student before saving.",
+            )
+            return
+
+        try:
+            with SessionLocal() as session:
+                saved_count = save_test_results(
+                    session,
+                    test_id=test_id,
+                    entries=entries,
+                )
+        except ValueError as error:
+            QMessageBox.warning(self, "Could Not Save Results", str(error))
+            return
+
+        self.load_results_tests()
+        QMessageBox.information(
+            self,
+            "Results Saved",
+            f"Results saved for {saved_count} student(s).",
+        )
 
     def create_test_dialog(self):
         with SessionLocal() as session:

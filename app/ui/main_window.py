@@ -1006,6 +1006,7 @@ QDialog QLabel{{
                     student.id,
                     student.admission_number or "-",
                     f"{student.first_name} {student.last_name or ''}".strip(),
+                    student.status,
                     str(existing_by_student[student.id].marks)
                     if student.id in existing_by_student else "",
                     existing_by_student[student.id].remarks or ""
@@ -1036,9 +1037,9 @@ QDialog QLabel{{
         layout.addWidget(note)
 
         results_table = QTableWidget()
-        results_table.setColumnCount(4)
+        results_table.setColumnCount(5)
         results_table.setHorizontalHeaderLabels(
-            ["Admission No.", "Student", "Marks", "Remarks"]
+            ["Admission No.", "Student", "Status", "Marks", "Remarks"]
         )
         results_table.setRowCount(len(student_rows))
         results_table.verticalHeader().setVisible(False)
@@ -1048,7 +1049,14 @@ QDialog QLabel{{
         )
 
         for row_index, values in enumerate(student_rows):
-            student_id, admission_number, student_name, marks, remarks = values
+            (
+                student_id,
+                admission_number,
+                student_name,
+                student_status,
+                marks,
+                remarks,
+            ) = values
             admission_item = QTableWidgetItem(admission_number)
             admission_item.setFlags(
                 admission_item.flags() & ~Qt.ItemFlag.ItemIsEditable
@@ -1058,10 +1066,35 @@ QDialog QLabel{{
                 name_item.flags() & ~Qt.ItemFlag.ItemIsEditable
             )
             name_item.setData(Qt.ItemDataRole.UserRole, student_id)
+            status_item = QTableWidgetItem(student_status.title())
+            status_item.setFlags(
+                status_item.flags() & ~Qt.ItemFlag.ItemIsEditable
+            )
+            marks_item = QTableWidgetItem(marks)
+            remarks_item = QTableWidgetItem(remarks)
+
+            if student_status != "ACTIVE":
+                marks_item.setFlags(
+                    marks_item.flags() & ~Qt.ItemFlag.ItemIsEditable
+                )
+                remarks_item.setFlags(
+                    remarks_item.flags() & ~Qt.ItemFlag.ItemIsEditable
+                )
+                status_item.setToolTip(
+                    "Only active students can have results entered or edited."
+                )
+                marks_item.setToolTip(
+                    "Results for inactive or left students are read-only."
+                )
+                remarks_item.setToolTip(
+                    "Results for inactive or left students are read-only."
+                )
+
             results_table.setItem(row_index, 0, admission_item)
             results_table.setItem(row_index, 1, name_item)
-            results_table.setItem(row_index, 2, QTableWidgetItem(marks))
-            results_table.setItem(row_index, 3, QTableWidgetItem(remarks))
+            results_table.setItem(row_index, 2, status_item)
+            results_table.setItem(row_index, 3, marks_item)
+            results_table.setItem(row_index, 4, remarks_item)
 
         layout.addWidget(results_table)
 
@@ -1078,11 +1111,15 @@ QDialog QLabel{{
 
         entries = []
         for row_index in range(results_table.rowCount()):
+            student_status = results_table.item(row_index, 2).text().strip().upper()
+            if student_status != "ACTIVE":
+                continue
+
             student_id = results_table.item(
                 row_index, 1
             ).data(Qt.ItemDataRole.UserRole)
-            marks_text = results_table.item(row_index, 2).text().strip()
-            remarks = results_table.item(row_index, 3).text().strip()
+            marks_text = results_table.item(row_index, 3).text().strip()
+            remarks = results_table.item(row_index, 4).text().strip()
 
             if not marks_text:
                 continue

@@ -6,7 +6,7 @@ from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
 from app.services.student_service import count_students,  get_students_by_batch, create_student_with_parent, get_student, update_student
 from app.services.fee_service import get_outstanding_amount, get_student_fee_summary
-from app.services.test_service import count_upcoming_tests, get_student_results
+from app.services.test_service import count_upcoming_tests, get_student_results, create_test, get_tests
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
 from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary, create_attendance_override, get_attendance_override
@@ -30,6 +30,10 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QTabWidget,
     QDateEdit,
+    QFormLayout,
+    QLineEdit,
+    QSpinBox,
+    QDialogButtonBox,
     
 )
 
@@ -520,6 +524,8 @@ QDialog QLabel{{
             self.load_students()
         if index == 2:
             self.load_attendance_students()
+        if index == 3:
+            self.load_results_tests()
 
         for button in self.sidebar_buttons:
             button.setProperty("active", button.property("page_index") == index)
@@ -667,18 +673,17 @@ QDialog QLabel{{
         
 
         lower_layout.addWidget(today_card, 1)
-        lower_layout.addWidget(alerts_card, 1)
-
-        layout.addLayout(lower_layout)
-
-        return page
-    def create_results_page(self):
+        lower_la    def create_results_page(self):
         page = QWidget()
         page.setObjectName("resultsPage")
 
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 25, 30, 30)
         layout.setSpacing(18)
+
+        header_layout = QHBoxLayout()
+        heading_layout = QVBoxLayout()
+        heading_layout.setSpacing(4)
 
         title = QLabel("Results")
         title.setStyleSheet("""
@@ -690,7 +695,7 @@ QDialog QLabel{{
         """)
 
         subtitle = QLabel(
-            "Create tests, enter marks, and track student performance."
+            "Create tests and track student performance."
         )
         subtitle.setStyleSheet("""
             QLabel {
@@ -699,7 +704,189 @@ QDialog QLabel{{
             }
         """)
 
-        layout.addWidget(title)
+        heading_layout.addWidget(title)
+        heading_layout.addWidget(subtitle)
+        header_layout.addLayout(heading_layout)
+        header_layout.addStretch()
+
+        create_button = QPushButton("＋ Create Test")
+        create_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        create_button.setFixedHeight(42)
+        create_button.setStyleSheet("""
+            QPushButton {
+                background: #012D54;
+                color: #FEFEFE;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 18px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: #04294D;
+            }
+        """)
+        create_button.clicked.connect(self.create_test_dialog)
+        header_layout.addWidget(create_button)
+
+        layout.addLayout(header_layout)
+
+        self.results_tests_table = QTableWidget()
+        self.results_tests_table.setObjectName("resultsTestsTable")
+        self.results_tests_table.setColumnCount(4)
+        self.results_tests_table.setHorizontalHeaderLabels(
+            ["Test Name", "Batch", "Test Date", "Maximum Marks"]
+        )
+        self.results_tests_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.results_tests_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.results_tests_table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection
+        )
+        self.results_tests_table.verticalHeader().setVisible(False)
+        self.results_tests_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.results_tests_table.setStyleSheet("""
+            QTableWidget {
+                background: #FEFEFE;
+                border: 1px solid #E9DEBA;
+                border-radius: 10px;
+                gridline-color: #E9DEBA;
+                color: #1F2937;
+                selection-background-color: #E9DEBA;
+                selection-color: #012D54;
+            }
+            QTableWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #F1EBD3;
+            }
+            QHeaderView::section {
+                background: #012D54;
+                color: #FEFEFE;
+                padding: 10px;
+                border: none;
+                font-weight: 600;
+            }
+        """)
+
+        layout.addWidget(self.results_tests_table)
+        return page
+
+    def load_results_tests(self):
+        if not hasattr(self, "results_tests_table"):
+            return
+
+        selected_batch_id = self.batch_selector.currentData()
+
+        with SessionLocal() as session:
+            tests = get_tests(
+                session,
+                batch_id=selected_batch_id,
+            )
+            rows = []
+            for test in tests:
+                batch = session.get(Batch, test.batch_id)
+                rows.append((
+                    test.name,
+                    batch.name if batch is not None else "Unknown batch",
+                    test.test_date.strftime("%d %b %Y"),
+                    str(test.max_marks),
+                ))
+
+        self.results_tests_table.setRowCount(len(rows))
+        for row_index, values in enumerate(rows):
+            for column_index, value in enumerate(values):
+                self.results_tests_table.setItem(
+                    row_index,
+                    column_index,
+                    QTableWidgetItem(value),
+                )
+
+    def create_test_dialog(self):
+        with SessionLocal() as session:
+            batches = get_active_batches(session)
+
+        if not batches:
+            QMessageBox.warning(
+                self,
+                "No Active Batches",
+                "Create or reactivate a batch before creating a test.",
+            )
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Create Test")
+        dialog.setMinimumWidth(420)
+
+        form = QFormLayout(dialog)
+
+        batch_input = QComboBox()
+        for batch in batches:
+            batch_input.addItem(batch.name, batch.id)
+
+        current_batch_id = self.batch_selector.currentData()
+        if current_batch_id is not None:
+            batch_index = batch_input.findData(current_batch_id)
+            if batch_index >= 0:
+                batch_input.setCurrentIndex(batch_index)
+
+        name_input = QLineEdit()
+        name_input.setPlaceholderText("e.g. Chapter 1 Test")
+
+        date_input = QDateEdit()
+        date_input.setCalendarPopup(True)
+        date_input.setDisplayFormat("dd MMM yyyy")
+        date_input.setDate(QDate.currentDate())
+
+        max_marks_input = QSpinBox()
+        max_marks_input.setRange(1, 100000)
+        max_marks_input.setValue(100)
+
+        form.addRow("Batch", batch_input)
+        form.addRow("Test name", name_input)
+        form.addRow("Test date", date_input)
+        form.addRow("Maximum marks", max_marks_input)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        test_name = name_input.text().strip()
+        if not test_name:
+            QMessageBox.warning(
+                self,
+                "Test Name Required",
+                "Please enter a name for this test.",
+            )
+            return
+
+        with SessionLocal() as session:
+            create_test(
+                session,
+                batch_id=int(batch_input.currentData()),
+                name=test_name,
+                test_date=date_input.date().toPyDate(),
+                max_marks=max_marks_input.value(),
+            )
+
+        self.load_results_tests()
+        QMessageBox.information(
+            self,
+            "Test Created",
+            f'"{test_name}" has been created successfully.',
+        )
+
+title)
         layout.addWidget(subtitle)
         layout.addStretch()
 

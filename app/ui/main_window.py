@@ -11,6 +11,7 @@ from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
 from app.services.attendance_service import count_present_students, get_student_attendance, mark_attendance, get_attendance_by_date, get_student_attendance_summary, create_attendance_override, get_attendance_override
 from app.database.models.batch import Batch
+from app.database.models.test import TestModel
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -976,7 +977,7 @@ QDialog QLabel{{
 
         with SessionLocal() as session:
             test = session.get(
-                __import__("app.database.models.test", fromlist=["TestModel"]).TestModel,
+                TestModel,
                 test_id,
             )
             if test is None:

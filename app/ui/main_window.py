@@ -993,6 +993,7 @@ QDialog QLabel{{
             students = get_students_by_batch(
                 session,
                 batch_id=batch_id,
+                include_inactive=True,
             )
             existing_results = get_test_results(session, test_id)
             existing_by_student = {

@@ -97,8 +97,6 @@ def save_test_results(
                 f"Marks must be between 0 and {test.max_marks}."
             )
 
-        from app.database.models.student import Student
-
         student = session.get(Student, student_id)
         if student is None or student.batch_id != test.batch_id:
             raise ValueError(

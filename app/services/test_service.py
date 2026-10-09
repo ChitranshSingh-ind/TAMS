@@ -75,6 +75,18 @@ def count_upcoming_tests(
             batch_id=batch_id,
         )
     )
+def get_test_results(
+    session: Session,
+    test_id: int,
+) -> list[TestResult]:
+    statement = (
+        select(TestResult)
+        .where(TestResult.test_id == test_id)
+        .order_by(TestResult.student_id)
+    )
+    return list(session.scalars(statement).all())
+
+
 def get_student_results(
     session: Session,
     student_id: int,

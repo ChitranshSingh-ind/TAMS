@@ -128,11 +128,12 @@ class SettingsDialog(QDialog):
         close_button = QPushButton("×")
         close_button.setObjectName("closeButton")
         close_button.setFixedSize(38, 38)
+        close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         close_button.clicked.connect(self.close)
 
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
-        header_layout.addWidget(close_button)
+        header_layout.addWidget(close_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         main_layout.addWidget(header)
 
@@ -382,33 +383,93 @@ class SettingsDialog(QDialog):
 
     def apply_styles(self):
         self.setStyleSheet(f"""
+            QWidget {{
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }}
+
+            /* ── Global ScrollBars ── */
+            QScrollBar:vertical {{
+                background: #F8F6EA;
+                width: 9px;
+                margin: 0px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:vertical {{
+                background: #D9B85F;
+                min-height: 24px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:vertical:hover {{
+                background: #C5A64D;
+            }}
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+                background: none;
+                border: none;
+            }}
+
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+
+            QScrollBar:horizontal {{
+                background: #F8F6EA;
+                height: 9px;
+                margin: 0px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:horizontal {{
+                background: #D9B85F;
+                min-width: 24px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:horizontal:hover {{
+                background: #C5A64D;
+            }}
+
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0px;
+                background: none;
+                border: none;
+            }}
+
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+                background: none;
+            }}
+
             QMessageBox {{
-    background: #FEFEFE;
-}}
+                background: #FEFEFE;
+            }}
 
-QMessageBox QLabel {{
-    color: #012D54;
-    font-size: 13px;
-}}
+            QMessageBox QLabel {{
+                color: #012D54;
+                font-size: 13px;
+            }}
 
-QMessageBox QPushButton {{
-    background: #FEFEFE;
-    color: #012D54;
-    border: 1px solid #E9DEBA;
-    border-radius: 7px;
-    padding: 8px 18px;
-    min-width: 70px;
-    font-weight: 600;
-}}
+            QMessageBox QPushButton {{
+                background: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #E9DEBA;
+                border-radius: 7px;
+                padding: 8px 18px;
+                min-width: 70px;
+                font-weight: 600;
+            }}
 
-QMessageBox QPushButton:hover {{
-    background: #E9DEBA;
-}}
+            QMessageBox QPushButton:hover {{
+                background: #E9DEBA;
+            }}
 
-QMessageBox QPushButton:pressed {{
-    background: #D9B85F;
-    color: #012D54;
-    }}
+            QMessageBox QPushButton:pressed {{
+                background: #D9B85F;
+                color: #012D54;
+            }}
+
             QDialog {{
                 background: {CREAM};
             }}
@@ -641,26 +702,25 @@ QMessageBox QPushButton:pressed {{
         # Status
         status = QLabel("ACTIVE")
         status.setObjectName("batchStatus")
-
-        layout.addWidget(status)
+        layout.addWidget(status, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         # Edit
         edit_button = QPushButton("Edit")
         edit_button.setObjectName("secondaryButton")
+        edit_button.setCursor(Qt.CursorShape.PointingHandCursor)
         edit_button.clicked.connect(
             lambda checked=False, b=batch: self.open_edit_batch_dialog(b)
         )
-
-        layout.addWidget(edit_button)
+        layout.addWidget(edit_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         # Deactivate
         deactivate_button = QPushButton("Deactivate")
         deactivate_button.setObjectName("dangerButton")
+        deactivate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         deactivate_button.clicked.connect(
             lambda checked=False, b=batch: self.deactivate_batch(b)
         )
-
-        layout.addWidget(deactivate_button)
+        layout.addWidget(deactivate_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         self.batch_list_layout.addWidget(card)
     def deactivate_batch(self, batch):
@@ -1527,16 +1587,17 @@ QMessageBox QPushButton:pressed {{
 
         status = QLabel("INACTIVE")
         status.setObjectName("inactiveBatchStatus")
-        layout.addWidget(status)
+        layout.addWidget(status, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         reactivate_button = QPushButton("Reactivate")
         reactivate_button.setObjectName("secondaryButton")
+        reactivate_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         reactivate_button.clicked.connect(
             lambda checked=False, b=batch:
             self.reactivate_batch(b)
         )
 
-        layout.addWidget(reactivate_button)
+        layout.addWidget(reactivate_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         self.inactive_batch_list_layout.addWidget(card)

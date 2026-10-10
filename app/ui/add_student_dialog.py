@@ -25,21 +25,23 @@ class AddStudentDialog(QDialog):
         layout.setSpacing(18)
 
         # Header
-        title = QLabel("Add Student")
-        title.setObjectName("addStudentTitle")
+        self.title_label = QLabel("Add Student")
+        self.title_label.setObjectName("addStudentTitle")
 
-        subtitle = QLabel(
+        self.subtitle_label = QLabel(
             "Enter the student's personal and parent information."
         )
-        subtitle.setObjectName("addStudentSubtitle")
+        self.subtitle_label.setObjectName("addStudentSubtitle")
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.subtitle_label)
 
         # Form
         form = QFormLayout()
         form.setSpacing(12)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         self.admission_number_input = QLineEdit()
         self.admission_number_input.setPlaceholderText(
@@ -131,6 +133,15 @@ class AddStudentDialog(QDialog):
             QDialogButtonBox.StandardButton.Cancel
             | QDialogButtonBox.StandardButton.Save
         )
+
+        save_btn = buttons.button(QDialogButtonBox.StandardButton.Save)
+        cancel_btn = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if save_btn:
+            save_btn.setObjectName("primaryDialogButton")
+            save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        if cancel_btn:
+            cancel_btn.setObjectName("secondaryDialogButton")
+            cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

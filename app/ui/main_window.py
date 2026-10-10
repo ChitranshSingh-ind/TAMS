@@ -84,37 +84,36 @@ class MainWindow(QMainWindow):
         top_bar.setObjectName("topBar")
 
         top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(20, 12, 20, 12)
+        top_layout.setContentsMargins(24, 12, 24, 12)
+        top_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         title = QLabel("Coaching Management System")
         title.setObjectName("appTitle")
 
-        
-
         settings_button = QPushButton("⚙")
         settings_button.setObjectName("settingButton")
+        settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
         settings_button.clicked.connect(self.open_settings)
 
-        top_layout.addWidget(title)
-     
+        top_layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignVCenter)
         top_layout.addStretch()
-        
-        top_layout.addWidget(settings_button)
+        top_layout.addWidget(settings_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         main_layout.addWidget(top_bar)
         #  Main area
         content_widget = QWidget()
         content_widget.setObjectName("contentWidget")
         content_layout = QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(0,0,0,0)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
-        
 
         content_toolbar = QFrame()
         content_toolbar.setObjectName("contentToolbar")
 
         content_toolbar_layout = QHBoxLayout(content_toolbar)
-        content_toolbar_layout.setContentsMargins(20,12,20,12)
+        content_toolbar_layout.setContentsMargins(30, 8, 30, 8)
+        content_toolbar_layout.setSpacing(10)
+        content_toolbar_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         content_toolbar_layout.addStretch()
 
@@ -126,8 +125,8 @@ class MainWindow(QMainWindow):
         self.batch_selector.setMinimumWidth(180)
         self.batch_selector.addItem("All Batches", None)
 
-        content_toolbar_layout.addWidget(batch_label)
-        content_toolbar_layout.addWidget(self.batch_selector)
+        content_toolbar_layout.addWidget(batch_label, alignment=Qt.AlignmentFlag.AlignVCenter)
+        content_toolbar_layout.addWidget(self.batch_selector, alignment=Qt.AlignmentFlag.AlignVCenter)
         self.batch_selector.currentIndexChanged.connect(self.on_batch_changed)
 
         content_layout.addWidget(content_toolbar)
@@ -176,6 +175,7 @@ class MainWindow(QMainWindow):
                 QSizePolicy.Policy.Expanding,
                 QSizePolicy.Policy.Fixed,
             )
+            button.setFixedHeight(40)
 
             button.setProperty("page_index", index)
             button.setProperty("active", index == 0)
@@ -230,311 +230,531 @@ class MainWindow(QMainWindow):
         
     def apply_styles(self):
         self.setStyleSheet(f"""
+            QWidget {{
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }}
+
             QMainWindow {{
                 background: {LIGHT_GOLD};
             }}
-    
+
+            /* ── Global ScrollBars ── */
+            QScrollBar:vertical {{
+                background: #F8F6EA;
+                width: 9px;
+                margin: 0px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:vertical {{
+                background: #D9B85F;
+                min-height: 24px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:vertical:hover {{
+                background: #C5A64D;
+            }}
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+                background: none;
+                border: none;
+            }}
+
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+
+            QScrollBar:horizontal {{
+                background: #F8F6EA;
+                height: 9px;
+                margin: 0px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:horizontal {{
+                background: #D9B85F;
+                min-width: 24px;
+                border-radius: 4px;
+            }}
+
+            QScrollBar::handle:horizontal:hover {{
+                background: #C5A64D;
+            }}
+
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0px;
+                background: none;
+                border: none;
+            }}
+
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+                background: none;
+            }}
+
+            /* ── Top Bar ── */
             #topBar {{
                 background: {NAVY};
                 border-bottom: 2px solid {GOLD};
             }}
-    
+
             #appTitle {{
                 color: {WHITE};
-                font-size: 24px;
-                font-weight: bold;
+                font-size: 22px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
             }}
-    
-            #batchLabel {{
-                color: {NAVY};
-                font-weight: 600;
-            }}
-    
-            #sidebar {{
-                background: {CREAM};
-                border-right: 1px solid {LIGHT_GOLD};
-            }}
-    
-            #batchSelector {{
-                background-color: {WHITE};
-                color: {NAVY};
-                border: 1px solid {GOLD};
-                border-radius: 6px;
-                padding: 7px 10px;
-            }}
-    
-            #batchSelector QAbstractItemView {{
-                background-color: {WHITE};
-                color: {TEXT};
-                selection-background-color: {NAVY};
-                selection-color: {WHITE};
-            }}
-    
-            #sidebar QPushButton {{
-                text-align: left;
-                padding: 10px 14px;
-                border: none;
-                border-radius: 6px;
-                font-size: 14px;
-                color: {NAVY};
-                background: transparent;
-            }}
-    
-            #sidebar QPushButton:hover {{
-                background: {LIGHT_GOLD};
-                color: {DARK_NAVY};
-            }}
-    
-            #contentToolbar {{
-                background: {CREAM};
-                border-bottom: 1px solid {LIGHT_GOLD};
-            }}
-    
-            QComboBox {{
-                padding: 7px 10px;
-                border: 1px solid {GOLD};
-                border-radius: 10px;
-                background: {WHITE};
-            }}
-    
+
             #settingButton {{
                 background: transparent;
                 color: {WHITE};
                 border: none;
-                font-size: 18px;
+                font-size: 20px;
+                border-radius: 18px;
+                padding: 4px;
             }}
-    
+
             #settingButton:hover {{
                 background: {DARK_NAVY};
             }}
-    
+
+            #contentToolbar {{
+                background: {CREAM};
+                border-bottom: 1px solid {LIGHT_GOLD};
+            }}
+
+            #batchLabel {{
+                color: {NAVY};
+                font-size: 13px;
+                font-weight: 600;
+            }}
+
+            #batchSelector {{
+                background-color: {WHITE};
+                color: {NAVY};
+                border: 1px solid {GOLD};
+                border-radius: 7px;
+                padding: 6px 12px;
+                font-size: 13px;
+                font-weight: 500;
+            }}
+
             #batchSelector::drop-down {{
                 border: none;
                 width: 0px;
             }}
-    
+
             #batchSelector::down-arrow {{
                 image: none;
                 width: 0px;
                 height: 0px;
             }}
+
+            #batchSelector QAbstractItemView {{
+                background-color: {WHITE};
+                color: {TEXT};
+                border: 1px solid {GOLD};
+                border-radius: 6px;
+                selection-background-color: {NAVY};
+                selection-color: {WHITE};
+                padding: 4px;
+            }}
+
+            /* ── Sidebar ── */
+            #sidebar {{
+                background: {CREAM};
+                border-right: 1px solid {LIGHT_GOLD};
+            }}
+
+            #sidebar QPushButton {{
+                text-align: left;
+                padding: 10px 16px;
+                border: none;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                color: {NAVY};
+                background: transparent;
+            }}
+
+            #sidebar QPushButton:hover {{
+                background: {LIGHT_GOLD};
+                color: {DARK_NAVY};
+            }}
+
             #sidebar QPushButton[active="true"] {{
                 background: {GOLD};
                 color: {NAVY};
                 font-weight: 700;
             }}
+
+            /* ── General ComboBox ── */
+            QComboBox {{
+                padding: 7px 12px;
+                border: 1px solid {GOLD};
+                border-radius: 7px;
+                background: {WHITE};
+                color: {TEXT};
+                font-size: 13px;
+            }}
+
+            QComboBox QAbstractItemView {{
+                background: {WHITE};
+                color: {TEXT};
+                border: 1px solid {LIGHT_GOLD};
+                selection-background-color: {NAVY};
+                selection-color: {WHITE};
+                padding: 4px;
+            }}
+
+            /* ── Global Tables ── */
+            QTableWidget {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 10px;
+                gridline-color: #F1EBD3;
+                color: {TEXT};
+                font-size: 13px;
+                selection-background-color: {LIGHT_GOLD};
+                selection-color: {NAVY};
+                outline: none;
+            }}
+
+            QTableWidget::item {{
+                padding: 8px 12px;
+                border-bottom: 1px solid #F1EBD3;
+            }}
+
+            QTableWidget::item:selected {{
+                background-color: {LIGHT_GOLD};
+                color: {NAVY};
+            }}
+
+            QHeaderView::section {{
+                background: {NAVY};
+                color: {WHITE};
+                padding: 10px 12px;
+                border: none;
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.3px;
+            }}
+
+            QTableCornerButton::section {{
+                background: {NAVY};
+                border: none;
+            }}
+
+            /* ── Dashboard Page ── */
             #dashboardPage {{
-        background: #F8F6EA;
-    }}
+                background: {CREAM};
+            }}
 
-    #dashboardGreeting {{
-        color: #012D54;
-        font-size: 26px;
-        font-weight: 700;
-    }}
+            #dashboardGreeting {{
+                color: {NAVY};
+                font-size: 26px;
+                font-weight: 700;
+            }}
 
-    #dashboardSubtitle {{
-        color: #615F4B;
-        font-size: 13px;
-    }}
+            #dashboardSubtitle {{
+                color: {MUTED};
+                font-size: 13px;
+            }}
 
-    #dashboardCard {{
-        background: #FEFEFE;
-        border: 1px solid #E9DEBA;
-        border-radius: 10px;
-    }}
+            #dashboardCard {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 10px;
+            }}
 
-    #dashboardCard:hover {{
-        border: 1px solid #D9B85F;
-    }}
+            #dashboardCard:hover {{
+                border: 1px solid {GOLD};
+            }}
 
-    #dashboardCardTitle {{
-        color: #615F4B;
-        font-size: 12px;
-        font-weight: 600;
-    }}
+            #dashboardCardTitle {{
+                color: {MUTED};
+                font-size: 12px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
 
-    #dashboardCardValue {{
-        color: #012D54;
-        font-size: 28px;
-        font-weight: 700;
-    }}
+            #dashboardCardValue {{
+                color: {NAVY};
+                font-size: 28px;
+                font-weight: 700;
+            }}
 
-    #dashboardCardDescription {{
-        color: #615F4B;
-        font-size: 11px;
-    }}
+            #dashboardCardDescription {{
+                color: {MUTED};
+                font-size: 12px;
+            }}
 
-    #dashboardSectionCard {{
-        background: #FEFEFE;
-        border: 1px solid #E9DEBA;
-        border-radius: 10px;
-        min-height: 180px;
-    }}
+            #dashboardSectionCard {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 10px;
+                min-height: 180px;
+            }}
 
-    #dashboardSectionTitle {{
-        color: #012D54;
-        font-size: 16px;
-        font-weight: 700;
-    }}
+            #dashboardSectionTitle {{
+                color: {NAVY};
+                font-size: 16px;
+                font-weight: 700;
+            }}
 
-    #dashboardSectionText {{
-        color: #615F4B;
-        font-size: 13px;
-    }}
-    #studentsPage {{
-    background: #F8F6EA;
-}}
+            #dashboardSectionText {{
+                color: {MUTED};
+                font-size: 13px;
+                line-height: 1.4;
+            }}
 
-#studentsPageTitle {{
-    color: #012D54;
-    font-size: 26px;
-    font-weight: 700;
-}}
+            /* ── Students Page ── */
+            #studentsPage {{
+                background: {CREAM};
+            }}
 
-#studentsPageSubtitle {{
-    color: #615F4B;
-    font-size: 13px;
-}}
-#studentsPage {{
-    background: #F8F6EA;
-}}
+            #studentsPageTitle {{
+                color: {NAVY};
+                font-size: 26px;
+                font-weight: 700;
+            }}
 
-#studentsPageTitle {{
-    color: #012D54;
-    font-size: 26px;
-    font-weight: 700;
-}}
+            #studentsPageSubtitle {{
+                color: {MUTED};
+                font-size: 13px;
+            }}
 
-#studentsPageSubtitle {{
-    color: #615F4B;
-    font-size: 13px;
-}}
+            #addStudentButton {{
+                background: {NAVY};
+                color: {WHITE};
+                border: none;
+                border-radius: 8px;
+                padding: 10px 18px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
 
-#addStudentButton {{
-    background: #012D54;
-    color: #FEFEFE;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 18px;
-    font-size: 13px;
-    font-weight: 600;
-}}
+            #addStudentButton:hover {{
+                background: {DARK_NAVY};
+            }}
 
-#addStudentButton:hover {{
-    background: #04294D;
-}}
+            #addStudentButton:pressed {{
+                background: #001F3A;
+            }}
 
-#addStudentButton:pressed {{
-    background: #001F3A;
-}}
+            #studentsTableFrame {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 12px;
+            }}
 
-#studentsTableFrame {{
-    background: #FEFEFE;
-    border: 1px solid #E9DEBA;
-    border-radius: 12px;
-}}
+            #studentsTablePlaceholder {{
+                color: {MUTED};
+                font-size: 14px;
+            }}
 
-#studentsTablePlaceholder {{
-    color: #615F4B;
-    font-size: 14px;
-}}
-#studentsTable {{
-    background: #FEFEFE;
-    border: 1px solid #E9DEBA;
-    border-radius: 10px;
-    gridline-color: #E9DEBA;
-    color: #1F2937;
-    font-size: 13px;
-    selection-background-color: #E9DEBA;
-    selection-color: #012D54;
-}}
+            #studentsTable {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 10px;
+                gridline-color: #F1EBD3;
+                color: {TEXT};
+                font-size: 13px;
+                selection-background-color: {LIGHT_GOLD};
+                selection-color: {NAVY};
+            }}
 
-#studentsTable::item {{
-    padding: 8px;
-    border-bottom: 1px solid #F1EBD3;
-}}
+            #studentsTable::item {{
+                padding: 8px;
+                border-bottom: 1px solid #F1EBD3;
+            }}
 
-#studentsTable QHeaderView::section {{
-    background: #012D54;
-    color: #FEFEFE;
-    padding: 10px;
-    border: none;
-    font-size: 12px;
-    font-weight: 600;
-}}
+            #studentsTable QHeaderView::section {{
+                background: {NAVY};
+                color: {WHITE};
+                padding: 10px 12px;
+                border: none;
+                font-size: 12px;
+                font-weight: 600;
+            }}
 
-#studentsTable QTableCornerButton::section {{
-    background: #012D54;
-    border: none;
-}}
-#addStudentTitle {{
-    color: {NAVY};
-    font-size: 22px;
-    font-weight: 700;
-}}
+            #editStudentButton {{
+                background: {LIGHT_GOLD};
+                color: {NAVY};
+                border: 1px solid {GOLD};
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 700;
+            }}
 
-#addStudentSubtitle {{
-    color: {DARK_NAVY};
-    font-size: 13px;
-}}
+            #editStudentButton:hover {{
+                background: {GOLD};
+                color: {NAVY};
+            }}
 
-QDialog {{
-    background: #F8F6EA;
-}}
+            #editStudentButton:pressed {{
+                background: #C5A64D;
+                color: {NAVY};
+            }}
 
-QDialog QLineEdit,
-QDialog QComboBox,
-QDialog QDateEdit,
-QDialog QPlainTextEdit {{
-    background: #FEFEFE;
-    color: #1F2937;
-    border: 1px solid #D9B85F;
-    border-radius: 6px;
-    padding: 7px 9px;
-}}
+            /* ── Results Page ── */
+            #resultsPage {{
+                background: {CREAM};
+            }}
 
-QDialog QLineEdit:focus,
-QDialog QComboBox:focus,
-QDialog QDateEdit:focus,
-QDialog QPlainTextEdit:focus {{
-    border: 2px solid #012D54;
-}}
+            /* ── Attendance Page ── */
+            #attendancePage {{
+                background: {CREAM};
+            }}
 
-QDialog QDialogButtonBox QPushButton {{
-    background: #012D54;
-    color: #FEFEFE;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 18px;
-    font-weight: 600;
-}}
+            #attendanceSummaryBadge {{
+                background: {WHITE};
+                color: {NAVY};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
 
-QDialog QDialogButtonBox QPushButton:hover {{
-    background: #04294D;
-}}
-QDialog QLabel{{
-    color: {NAVY};
-}}
-#editStudentButton {{
-    background: #E9DEBA;
-    color: #012D54;
-    border: 1px solid #D9B85F;
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 700;
-}}
+            /* ── Dialogs & Forms ── */
+            QDialog {{
+                background: {CREAM};
+            }}
 
-#editStudentButton:hover {{
-    background: #D9B85F;
-    color: #012D54;
-}}
+            QDialog QLabel {{
+                color: {NAVY};
+                font-size: 13px;
+            }}
 
-#editStudentButton:pressed {{
-    background: #C5A64D;
-    color: #012D54;
-}}
+            #addStudentTitle {{
+                color: {NAVY};
+                font-size: 22px;
+                font-weight: 700;
+            }}
+
+            #addStudentSubtitle {{
+                color: {MUTED};
+                font-size: 13px;
+            }}
+
+            QDialog QLineEdit,
+            QDialog QComboBox,
+            QDialog QDateEdit,
+            QDialog QSpinBox,
+            QDialog QPlainTextEdit {{
+                background: {WHITE};
+                color: {TEXT};
+                border: 1px solid {GOLD};
+                border-radius: 7px;
+                padding: 7px 11px;
+                font-size: 13px;
+            }}
+
+            QDialog QLineEdit:focus,
+            QDialog QComboBox:focus,
+            QDialog QDateEdit:focus,
+            QDialog QSpinBox:focus,
+            QDialog QPlainTextEdit:focus {{
+                border: 2px solid {NAVY};
+            }}
+
+            QSpinBox::up-button, QSpinBox::down-button {{
+                width: 18px;
+                background: {LIGHT_GOLD};
+                border: none;
+            }}
+
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+                background: {GOLD};
+            }}
+
+            /* ── Dialog Buttons ── */
+            #primaryDialogButton,
+            QDialogButtonBox QPushButton:default {{
+                background: {NAVY};
+                color: {WHITE};
+                border: 1px solid {NAVY};
+                border-radius: 7px;
+                padding: 8px 20px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+
+            #primaryDialogButton:hover,
+            QDialogButtonBox QPushButton:default:hover {{
+                background: {DARK_NAVY};
+                border-color: {DARK_NAVY};
+            }}
+
+            #primaryDialogButton:pressed,
+            QDialogButtonBox QPushButton:default:pressed {{
+                background: #001F3A;
+            }}
+
+            #secondaryDialogButton,
+            QDialogButtonBox QPushButton {{
+                background: {WHITE};
+                color: {NAVY};
+                border: 1px solid {GOLD};
+                border-radius: 7px;
+                padding: 8px 18px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+
+            #secondaryDialogButton:hover,
+            QDialogButtonBox QPushButton:hover {{
+                background: {LIGHT_GOLD};
+            }}
+
+            #secondaryDialogButton:pressed,
+            QDialogButtonBox QPushButton:pressed {{
+                background: {GOLD};
+            }}
+
+            /* ── Calendar Popup ── */
+            QCalendarWidget {{
+                background: {WHITE};
+                border: 1px solid {GOLD};
+                border-radius: 8px;
+            }}
+
+            QCalendarWidget QWidget#qt_calendar_navigationbar {{
+                background-color: {NAVY};
+                border-top-left-radius: 7px;
+                border-top-right-radius: 7px;
+                padding: 4px;
+            }}
+
+            QCalendarWidget QToolButton {{
+                color: {WHITE};
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-weight: 600;
+            }}
+
+            QCalendarWidget QToolButton:hover {{
+                background-color: {DARK_NAVY};
+            }}
+
+            QCalendarWidget QSpinBox {{
+                background-color: {NAVY};
+                color: {WHITE};
+                border: none;
+            }}
+
+            QCalendarWidget QTableView {{
+                background-color: {WHITE};
+                selection-background-color: {NAVY};
+                selection-color: {WHITE};
+                alternate-background-color: {CREAM};
+            }}
         """)
     def change_page(self, index):
         self.pages.setCurrentIndex(index)
@@ -592,8 +812,8 @@ QDialog QLabel{{
         page.setObjectName("dashboardPage")
 
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(20)
+        layout.setContentsMargins(30, 28, 30, 28)
+        layout.setSpacing(22)
 
         # ── Header ──────────────────────────────────────
         header_layout = QVBoxLayout()
@@ -719,10 +939,11 @@ QDialog QLabel{{
         page.setObjectName("resultsPage")
 
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 25, 30, 30)
+        layout.setContentsMargins(30, 28, 30, 28)
         layout.setSpacing(18)
 
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
         heading_layout = QVBoxLayout()
         heading_layout.setSpacing(4)
 
@@ -767,7 +988,7 @@ QDialog QLabel{{
             }
         """)
         create_button.clicked.connect(self.create_test_dialog)
-        header_layout.addWidget(create_button)
+        header_layout.addWidget(create_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         check_results_button = QPushButton("Check Results")
         check_results_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -792,7 +1013,7 @@ QDialog QLabel{{
             }
         """)
         check_results_button.clicked.connect(self.check_selected_test_results)
-        header_layout.addWidget(check_results_button)
+        header_layout.addWidget(check_results_button, alignment=Qt.AlignmentFlag.AlignVCenter)
         self.check_results_button = check_results_button
 
         edit_results_button = QPushButton("Edit Results")
@@ -818,7 +1039,7 @@ QDialog QLabel{{
             }
         """)
         edit_results_button.clicked.connect(self.edit_selected_test_results)
-        header_layout.addWidget(edit_results_button)
+        header_layout.addWidget(edit_results_button, alignment=Qt.AlignmentFlag.AlignVCenter)
         self.edit_results_button = edit_results_button
 
         layout.addLayout(header_layout)
@@ -898,6 +1119,9 @@ QDialog QLabel{{
                 item = QTableWidgetItem(value)
                 if column_index == 0:
                     item.setData(Qt.ItemDataRole.UserRole, tests[row_index].id)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                else:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.results_tests_table.setItem(
                     row_index,
                     column_index,
@@ -948,6 +1172,8 @@ QDialog QLabel{{
         dialog.setWindowTitle(f"Results — {test_name}")
         dialog.resize(760, 460)
         layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
         heading = QLabel(f"Recorded results: {test_name}")
         heading.setStyleSheet(
@@ -971,10 +1197,15 @@ QDialog QLabel{{
 
         for row_index, values in enumerate(rows):
             for column_index, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column_index in (0, 2, 3):
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                else:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 results_table.setItem(
                     row_index,
                     column_index,
-                    QTableWidgetItem(value),
+                    item,
                 )
 
         layout.addWidget(results_table)
@@ -987,8 +1218,14 @@ QDialog QLabel{{
             layout.addWidget(empty_label)
 
         close_button = QPushButton("Close")
+        close_button.setObjectName("primaryDialogButton")
+        close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.setFixedWidth(100)
         close_button.clicked.connect(dialog.accept)
-        layout.addWidget(close_button)
+        layout.addWidget(
+            close_button,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
 
         dialog.exec()
 
@@ -1050,6 +1287,8 @@ QDialog QLabel{{
         dialog.setWindowTitle(f"Edit Results — {test_name}")
         dialog.resize(850, 520)
         layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
         heading = QLabel(
             f"Enter or edit marks for {test_name} (maximum {max_marks})."
@@ -1074,7 +1313,6 @@ QDialog QLabel{{
         )
         results_table.setRowCount(len(student_rows))
         results_table.verticalHeader().setVisible(False)
-        results_table.setAlternatingRowColors(True)
         results_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
@@ -1092,17 +1330,26 @@ QDialog QLabel{{
             admission_item.setFlags(
                 admission_item.flags() & ~Qt.ItemFlag.ItemIsEditable
             )
+            admission_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
             name_item = QTableWidgetItem(student_name)
             name_item.setFlags(
                 name_item.flags() & ~Qt.ItemFlag.ItemIsEditable
             )
+            name_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
             name_item.setData(Qt.ItemDataRole.UserRole, student_id)
+
             status_item = QTableWidgetItem(student_status.title())
             status_item.setFlags(
                 status_item.flags() & ~Qt.ItemFlag.ItemIsEditable
             )
+            status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
             marks_item = QTableWidgetItem(marks)
+            marks_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
             remarks_item = QTableWidgetItem(remarks)
+            remarks_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
             if student_status != "ACTIVE":
                 marks_item.setFlags(
@@ -1133,6 +1380,15 @@ QDialog QLabel{{
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel
         )
+        save_btn = buttons.button(QDialogButtonBox.StandardButton.Save)
+        cancel_btn = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if save_btn:
+            save_btn.setObjectName("primaryDialogButton")
+            save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        if cancel_btn:
+            cancel_btn.setObjectName("secondaryDialogButton")
+            cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
@@ -1219,9 +1475,13 @@ QDialog QLabel{{
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Create Test")
-        dialog.setMinimumWidth(420)
+        dialog.setMinimumWidth(440)
 
         form = QFormLayout(dialog)
+        form.setContentsMargins(24, 20, 24, 20)
+        form.setSpacing(14)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
 
         batch_input = QComboBox()
         for batch in batches:
@@ -1254,6 +1514,15 @@ QDialog QLabel{{
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel
         )
+        save_btn = buttons.button(QDialogButtonBox.StandardButton.Save)
+        cancel_btn = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if save_btn:
+            save_btn.setObjectName("primaryDialogButton")
+            save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        if cancel_btn:
+            cancel_btn.setObjectName("secondaryDialogButton")
+            cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
@@ -1291,7 +1560,7 @@ QDialog QLabel{{
         page.setObjectName("studentsPage")
 
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 25, 30, 30)
+        layout.setContentsMargins(30, 28, 30, 28)
         layout.setSpacing(18)
 
         # Header
@@ -1323,7 +1592,7 @@ QDialog QLabel{{
         )
         add_student_button.clicked.connect(self.open_add_student_dialog)
 
-        header_layout.addWidget(add_student_button)
+        header_layout.addWidget(add_student_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         layout.addLayout(header_layout)
 
@@ -1434,51 +1703,38 @@ QDialog QLabel{{
                 if student.batch:
                     batch_name = student.batch.name
 
-                self.students_table.setItem(
-                    row,
-                    0,
-                    QTableWidgetItem(
-                        student.admission_number or ""
-                    ),
-                )
+                adm_item = QTableWidgetItem(student.admission_number or "")
+                adm_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.students_table.setItem(row, 0, adm_item)
 
-                self.students_table.setItem(
-                    row,
-                    1,
-                    QTableWidgetItem(
-                        f"{student.first_name} {student.last_name or ''}".strip()
-                    ),
+                name_item = QTableWidgetItem(
+                    f"{student.first_name} {student.last_name or ''}".strip()
                 )
+                name_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self.students_table.setItem(row, 1, name_item)
 
-                self.students_table.setItem(
-                    row,
-                    2,
-                    QTableWidgetItem(parent_name),
-                )
+                parent_item = QTableWidgetItem(parent_name)
+                parent_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self.students_table.setItem(row, 2, parent_item)
 
-                self.students_table.setItem(
-                    row,
-                    3,
-                    QTableWidgetItem(parent_phone),
-                )
+                phone_item = QTableWidgetItem(parent_phone)
+                phone_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.students_table.setItem(row, 3, phone_item)
 
-                self.students_table.setItem(
-                    row,
-                    4,
-                    QTableWidgetItem(batch_name),
-                )
+                batch_item = QTableWidgetItem(batch_name)
+                batch_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.students_table.setItem(row, 4, batch_item)
 
-                self.students_table.setItem(
-                    row,
-                    5,
-                    QTableWidgetItem(student.status),
-                )
+                status_item = QTableWidgetItem(student.status)
+                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.students_table.setItem(row, 5, status_item)
+
                 # Action buttons
                 action_widget = QWidget()
                 action_layout = QHBoxLayout(action_widget)
-
-                action_layout.setContentsMargins(4, 2, 4, 2)
-                action_layout.setSpacing(5)
+                action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                action_layout.setContentsMargins(6, 4, 6, 4)
+                action_layout.setSpacing(8)
 
                 # View button
                 view_button = QPushButton("View")
@@ -1782,6 +2038,11 @@ QDialog QLabel{{
         dialog = AddStudentDialog(
             batches=batches,
             parent=self,
+        )
+        dialog.setWindowTitle("Edit Student")
+        dialog.title_label.setText("Edit Student")
+        dialog.subtitle_label.setText(
+            "Update the student's personal and parent information."
         )
 
         dialog.admission_number_input.setText(admission_number)
@@ -2124,6 +2385,7 @@ QDialog QLabel{{
             card_layout.setSpacing(3)
 
             title_label = QLabel(title)
+            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             title_label.setStyleSheet("""
                 QLabel {
                     color: #615F4B;
@@ -2133,6 +2395,7 @@ QDialog QLabel{{
                 }
             """)
 
+            value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             value_label.setStyleSheet("""
                 QLabel {
                     color: #012D54;
@@ -2255,6 +2518,7 @@ QDialog QLabel{{
             card_layout.setSpacing(3)
 
             title_label = QLabel(title)
+            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             title_label.setStyleSheet("""
                 color: #615F4B;
                 background: transparent;
@@ -2262,6 +2526,7 @@ QDialog QLabel{{
                 font-weight: 600;
             """)
 
+            value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             value_label.setStyleSheet("""
                 color: #012D54;
                 background: transparent;
@@ -2406,6 +2671,7 @@ QDialog QLabel{{
             card_layout.setSpacing(3)
 
             title_label = QLabel(title)
+            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             title_label.setStyleSheet("""
                 QLabel {
                     color: #615F4B;
@@ -2415,6 +2681,7 @@ QDialog QLabel{{
                 }
             """)
 
+            value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             value_label.setStyleSheet("""
                 QLabel {
                     color: #012D54;
@@ -2511,6 +2778,10 @@ QDialog QLabel{{
         )
 
         dialog.setStyleSheet("""
+            QWidget {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+
             QDialog {
                 background: #F8F6EA;
             }
@@ -2600,19 +2871,13 @@ QDialog QLabel{{
         attendance_table.setRowCount(len(records))
 
         for row, record in enumerate(records):
-            attendance_table.setItem(
-                row,
-                0,
-                QTableWidgetItem(
-                    record.date.strftime("%d/%m/%Y")
-                ),
-            )
+            d_item = QTableWidgetItem(record.date.strftime("%d/%m/%Y"))
+            d_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            attendance_table.setItem(row, 0, d_item)
 
-            attendance_table.setItem(
-                row,
-                1,
-                QTableWidgetItem(record.status),
-            )
+            s_item = QTableWidgetItem(record.status)
+            s_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            attendance_table.setItem(row, 1, s_item)
     def load_student_results(
         self,
         student_id,
@@ -2668,43 +2933,25 @@ QDialog QLabel{{
                 else 0
             )
 
-            results_table.setItem(
-                row,
-                0,
-                QTableWidgetItem(test.name),
-            )
+            name_item = QTableWidgetItem(test.name)
+            name_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            results_table.setItem(row, 0, name_item)
 
-            results_table.setItem(
-                row,
-                1,
-                QTableWidgetItem(
-                    test.test_date.strftime("%d/%m/%Y")
-                ),
-            )
+            date_item = QTableWidgetItem(test.test_date.strftime("%d/%m/%Y"))
+            date_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            results_table.setItem(row, 1, date_item)
 
-            results_table.setItem(
-                row,
-                2,
-                QTableWidgetItem(
-                    f"{result.marks} / {test.max_marks}"
-                ),
-            )
+            marks_item = QTableWidgetItem(f"{result.marks} / {test.max_marks}")
+            marks_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            results_table.setItem(row, 2, marks_item)
 
-            results_table.setItem(
-                row,
-                3,
-                QTableWidgetItem(
-                    f"{percentage:.1f}%"
-                ),
-            )
+            pct_item = QTableWidgetItem(f"{percentage:.1f}%")
+            pct_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            results_table.setItem(row, 3, pct_item)
 
-            results_table.setItem(
-                row,
-                4,
-                QTableWidgetItem(
-                    result.remarks or ""
-                ),
-            )
+            rem_item = QTableWidgetItem(result.remarks or "")
+            rem_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            results_table.setItem(row, 4, rem_item)
     def load_student_fee_summary(
         self,
         student_id,
@@ -2734,7 +2981,7 @@ QDialog QLabel{{
         page.setObjectName("attendancePage")
 
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 25, 30, 30)
+        layout.setContentsMargins(30, 28, 30, 28)
         layout.setSpacing(18)
 
         # Header
@@ -2765,6 +3012,7 @@ QDialog QLabel{{
         # Date
         date_layout = QHBoxLayout()
         date_layout.setSpacing(10)
+        date_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         date_label = QLabel("Date")
         date_label.setStyleSheet("""
@@ -2793,22 +3041,15 @@ QDialog QLabel{{
             }
         """)
 
-        date_layout.addWidget(date_label)
-        date_layout.addWidget(date_picker)
+        date_layout.addWidget(date_label, alignment=Qt.AlignmentFlag.AlignVCenter)
+        date_layout.addWidget(date_picker, alignment=Qt.AlignmentFlag.AlignVCenter)
         date_layout.addStretch()
 
         layout.addLayout(date_layout)
-        attendance_summary = QLabel("Present: 0  |  Absent: 0  |  Total: 0")
-        self.attendance_summary = attendance_summary
 
-        attendance_summary.setStyleSheet("""
-            QLabel {
-                color: #012D54;
-                font-size: 14px;
-                font-weight: 600;
-                padding: 6px 0;
-            }
-        """)
+        attendance_summary = QLabel("Present: 0  |  Absent: 0  |  Total: 0")
+        attendance_summary.setObjectName("attendanceSummaryBadge")
+        self.attendance_summary = attendance_summary
 
         layout.addWidget(attendance_summary)
 
@@ -3033,10 +3274,12 @@ QDialog QLabel{{
             admission_item = QTableWidgetItem(
                 student.admission_number or "-"
             )
+            admission_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             name_item = QTableWidgetItem(
                 f"{student.first_name} {student.last_name or ''}".strip()
             )
+            name_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
             self.attendance_table.setItem(
                 row,

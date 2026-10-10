@@ -1,6 +1,6 @@
 from datetime import date, datetime, UTC
 
-from sqlalchemy import Date, DateTime, ForeignKey, String
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -52,6 +52,11 @@ class Student(Base):
         nullable=True,
     )
 
+    monthly_fee: Mapped[float | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(20),
         default="ACTIVE",
@@ -84,4 +89,10 @@ class Student(Base):
     parent = relationship(
         "Parent",
         back_populates="students",
+    )
+
+    fees = relationship(
+        "Fee",
+        back_populates="student",
+        order_by="Fee.academic_year.desc(), Fee.fee_month.desc()",
     )

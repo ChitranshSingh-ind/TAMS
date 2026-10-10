@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 
-from sqlalchemy import Boolean, DateTime, String, Time
+from sqlalchemy import Boolean, DateTime, Numeric, String, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -17,6 +17,11 @@ class Batch(Base):
     end_time: Mapped[Time | None] = mapped_column(Time, nullable=True)
 
     days: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    monthly_fee: Mapped[float | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+    )
 
     active: Mapped[bool] = mapped_column(
         Boolean,
@@ -39,5 +44,10 @@ class Batch(Base):
 
     students = relationship(
         "Student",
+        back_populates="batch",
+    )
+
+    fees = relationship(
+        "Fee",
         back_populates="batch",
     )

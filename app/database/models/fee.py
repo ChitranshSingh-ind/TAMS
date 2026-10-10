@@ -1,13 +1,23 @@
 from datetime import date, datetime, UTC
+from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
 
 
 class Fee(Base):
     __tablename__ = "fees"
+    __table_args__ = (
+        Index(
+            "uq_fee_student_academic_month",
+            "student_id",
+            "academic_year",
+            "fee_month",
+            unique=True,
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -79,3 +89,43 @@ class Fee(Base):
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+    student = relationship(
+        "Student",
+        back_populates="fees",
+    )
+
+    batch = relationship(
+        "Batch",
+        back_populates="fees",
+    )
+
+    payments = relationship(
+        "FeePayment",
+        back_populates="fee",
+        cascade="all, delete-orphan",
+        order_by="FeePayment.payment_date.desc(), FeePayment.id.desc()",
+    )
+
+    @property
+    def total_paid(self) -> float:
+        valid_payments = [p for p in self.payments if not p.is_reversed]
+        return float(sum((Decimal(str(p.amount)) for p in valid_payments), Decimal("0.00")))
+
+    @property
+    def outstanding_balance(self) -> float:
+        balance = Decimal(str(self.final_amount_due)) - Decimal(str(self.total_paid))
+        return float(max(balance, Decimal("0.00")))
+
+    def calculate_status(self, as_of_date: date | None = None) -> str:
+        check_date = as_of_date or date.today()
+        paid = Decimal(str(self.total_paid))
+        due = Decimal(str(self.final_amount_due))
+
+        if due <= Decimal("0.00") or paid >= due:
+            return "PAID"
+        if paid > Decimal("0.00"):
+            return "PARTIALLY_PAID"
+        if self.due_date and self.due_date < check_date:
+            return "OVERDUE"
+        return "UNPAID"

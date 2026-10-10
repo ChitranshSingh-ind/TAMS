@@ -269,3 +269,36 @@ def test_save_batch_attendance_and_overrides():
         queried = get_attendance_override(session, batch_id=batch.id, override_date=tuesday)
         assert queried is not None
         assert queried.reason == "Extra class"
+
+
+def test_create_and_delete_test():
+    from datetime import date
+    from app.services.test_service import create_test, delete_test, get_tests, save_test_results, get_test_results
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    with Session() as session:
+        batch = create_batch(session, "Class 10-A")
+        student = create_student(session, admission_number="STU_T1", first_name="Tom", batch_id=batch.id)
+
+        test = create_test(
+            session,
+            batch_id=batch.id,
+            name="Unit Test 1",
+            test_date=date(2026, 10, 15),
+            max_marks=50,
+        )
+        assert test.id is not None
+        assert len(get_tests(session, batch_id=batch.id)) == 1
+
+        # Save result
+        save_test_results(session, test_id=test.id, entries=[{"student_id": student.id, "marks": 45, "remarks": "Good"}])
+        assert len(get_test_results(session, test.id)) == 1
+
+        # Delete test
+        success = delete_test(session, test.id)
+        assert success is True
+        assert len(get_tests(session, batch_id=batch.id)) == 0
+        assert len(get_test_results(session, test.id)) == 0

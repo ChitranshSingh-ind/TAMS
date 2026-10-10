@@ -686,11 +686,10 @@ class SettingsDialog(QDialog):
         name = QLabel(batch.name)
         name.setObjectName("batchName")
 
-        timing = QLabel(
-            f"{batch.start_time.strftime('%I:%M %p')}  –  "
-            f"{batch.end_time.strftime('%I:%M %p')}\n"
-            f"{batch.days}"
-        )
+        start_str = batch.start_time.strftime("%I:%M %p") if batch.start_time else "—"
+        end_str = batch.end_time.strftime("%I:%M %p") if batch.end_time else "—"
+        days_str = batch.days or "Not scheduled"
+        timing = QLabel(f"{start_str}  –  {end_str}\n{days_str}")
         timing.setObjectName("batchInfo")
 
         info_layout.addWidget(name)
@@ -1572,11 +1571,10 @@ class SettingsDialog(QDialog):
         name = QLabel(batch.name)
         name.setObjectName("batchName")
 
-        timing = QLabel(
-            f"{batch.start_time.strftime('%I:%M %p')}  –  "
-            f"{batch.end_time.strftime('%I:%M %p')}\n"
-            f"{batch.days}"
-        )
+        start_str = batch.start_time.strftime("%I:%M %p") if batch.start_time else "—"
+        end_str = batch.end_time.strftime("%I:%M %p") if batch.end_time else "—"
+        days_str = batch.days or "Not scheduled"
+        timing = QLabel(f"{start_str}  –  {end_str}\n{days_str}")
         timing.setObjectName("batchInfo")
 
         info_layout.addWidget(name)

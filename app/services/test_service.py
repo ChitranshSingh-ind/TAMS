@@ -161,3 +161,22 @@ def get_student_results(
     )
 
     return list(session.scalars(statement).all())
+
+
+def delete_test(
+    session: Session,
+    test_id: int,
+) -> bool:
+    test = session.get(TestModel, test_id)
+    if test is None:
+        return False
+
+    results = session.scalars(
+        select(TestResult).where(TestResult.test_id == test_id)
+    ).all()
+    for result in results:
+        session.delete(result)
+
+    session.delete(test)
+    session.commit()
+    return True

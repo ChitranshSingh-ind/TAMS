@@ -4,10 +4,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database.models.attendance import Attendance
-from app.database.models.fee import Fee
-from app.database.models.fee_payment import FeePayment
 from app.database.models.student import Student
 from app.database.models.test import TestModel
+from app.services.fee_service import get_outstanding_amount
 
 
 def get_dashboard_alerts(
@@ -48,43 +47,7 @@ def get_dashboard_alerts(
     # ---------------------------------------------------------
     # 2. Outstanding fees
     # ---------------------------------------------------------
-    fee_statement = (
-        select(
-            func.coalesce(
-                func.sum(Fee.final_amount_due),
-                0,
-            )
-        )
-    )
-
-    if batch_id is not None:
-        fee_statement = fee_statement.where(
-            Fee.batch_id == batch_id
-        )
-
-    total_due = session.scalar(fee_statement) or 0
-
-    payment_statement = (
-        select(
-            func.coalesce(
-                func.sum(FeePayment.amount),
-                0,
-            )
-        )
-        .join(
-            Fee,
-            Fee.id == FeePayment.fee_id,
-        )
-    )
-
-    if batch_id is not None:
-        payment_statement = payment_statement.where(
-            Fee.batch_id == batch_id
-        )
-
-    total_paid = session.scalar(payment_statement) or 0
-
-    outstanding = float(total_due - total_paid)
+    outstanding = get_outstanding_amount(session, batch_id=batch_id)
 
     if outstanding > 0:
         alerts.append(
@@ -112,5 +75,19 @@ def get_dashboard_alerts(
         alerts.append(
             f"{upcoming_tests} upcoming test(s) scheduled."
         )
+
+    # ---------------------------------------------------------
+    # 4. Outstanding expense payables
+    # ---------------------------------------------------------
+    if batch_id is None:
+        try:
+            from app.services.expense_service import get_expenses_summary
+            exp_summary = get_expenses_summary(session)
+            if exp_summary["total_outstanding"] > 0:
+                alerts.append(
+                    f"₹{exp_summary['total_outstanding']:,.0f} expense payables pending."
+                )
+        except Exception:
+            pass
 
     return alerts

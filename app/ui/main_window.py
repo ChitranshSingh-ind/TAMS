@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.add_student_dialog import AddStudentDialog
 from PyQt6.QtCore import Qt, QDate
@@ -12,8 +12,55 @@ from app.services.student_service import (
     update_student,
     update_student_with_parent,
 )
-from app.services.fee_service import get_outstanding_amount, get_student_fee_summary
-from app.services.test_service import count_upcoming_tests, get_student_results, create_test, get_tests, get_test_results, save_test_results
+import csv
+from app.services.fee_service import (
+    get_fees,
+    get_fees_summary,
+    get_fee,
+    record_payment,
+    get_fee_payments,
+    reverse_payment,
+    update_fee,
+    get_student_fees,
+    get_student_fee_summary,
+    get_outstanding_amount,
+)
+from app.ui.fee_dialogs import (
+    GenerateFeesDialog,
+    RecordPaymentDialog,
+    PaymentHistoryDialog,
+    EditFeeDialog,
+    CreateFeeDialog,
+    MONTH_NAMES,
+)
+from app.services.expense_service import (
+    get_expenses,
+    get_expenses_summary,
+    delete_expense,
+    export_expenses_csv,
+    DEFAULT_EXPENSE_CATEGORIES,
+    EXPENSE_PAYMENT_METHODS,
+)
+from app.services.financial_service import (
+    get_financial_summary,
+    get_monthly_financial_comparison,
+)
+from app.ui.expense_dialogs import (
+    AddExpenseDialog,
+    EditExpenseDialog,
+    RecordExpensePaymentDialog,
+    ExpensePaymentHistoryDialog,
+    FinancialAnalysisDialog,
+)
+from app.services.test_service import (
+    count_upcoming_tests,
+    get_student_results,
+    create_test,
+    get_tests,
+    get_test_results,
+    save_test_results,
+    delete_test,
+)
 from app.services.lesson_service import get_lessons_for_date
 from app.services.dashboard_service import get_dashboard_alerts
 from app.services.attendance_service import (
@@ -51,7 +98,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QSpinBox,
     QDialogButtonBox,
-    
+    QFileDialog,
 )
 
 NAVY = "#012D54"
@@ -205,6 +252,18 @@ class MainWindow(QMainWindow):
 
             if index == 3:
                 self.pages.addWidget(self.create_results_page())
+                continue
+
+            if index == 4:
+                self.pages.addWidget(self.create_fees_page())
+                continue
+
+            if index == 5:
+                self.pages.addWidget(self.create_expenses_page())
+                continue
+
+            if index == 7:
+                self.pages.addWidget(self.create_analysis_page())
                 continue
 
             page = QWidget()
@@ -620,6 +679,129 @@ class MainWindow(QMainWindow):
                 font-weight: 600;
             }}
 
+            /* ── Fees Page ── */
+            #feesPage {{
+                background: {CREAM};
+            }}
+
+            #feesPageTitle {{
+                color: {NAVY};
+                font-size: 26px;
+                font-weight: 700;
+            }}
+
+            #feesPageSubtitle {{
+                color: {MUTED};
+                font-size: 13px;
+            }}
+
+            #feesTable {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 10px;
+                gridline-color: #F1EBD3;
+                color: {TEXT};
+                font-size: 13px;
+                selection-background-color: {LIGHT_GOLD};
+                selection-color: {NAVY};
+            }}
+
+            #feesTable::item {{
+                padding: 8px 10px;
+                border-bottom: 1px solid #F1EBD3;
+            }}
+
+            #feesTable QHeaderView::section {{
+                background: {NAVY};
+                color: {WHITE};
+                padding: 10px 12px;
+                border: none;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+
+            /* ── Expenses Page ── */
+            #expensesPage {{
+                background: {CREAM};
+            }}
+
+            #expensesPageTitle {{
+                color: {NAVY};
+                font-size: 26px;
+                font-weight: 700;
+            }}
+
+            #expensesPageSubtitle {{
+                color: {MUTED};
+                font-size: 13px;
+            }}
+
+            #expensesTable {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 10px;
+                gridline-color: #F1EBD3;
+                color: {TEXT};
+                font-size: 13px;
+                selection-background-color: {LIGHT_GOLD};
+                selection-color: {NAVY};
+            }}
+
+            #expensesTable::item {{
+                padding: 8px 10px;
+                border-bottom: 1px solid #F1EBD3;
+            }}
+
+            #expensesTable QHeaderView::section {{
+                background: {NAVY};
+                color: {WHITE};
+                padding: 10px 12px;
+                border: none;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+
+            /* ── Financial Analysis Page ── */
+            #analysisPage {{
+                background: {CREAM};
+            }}
+
+            #analysisPageTitle {{
+                color: {NAVY};
+                font-size: 26px;
+                font-weight: 700;
+            }}
+
+            #analysisPageSubtitle {{
+                color: {MUTED};
+                font-size: 13px;
+            }}
+
+            #analysisTable {{
+                background: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 10px;
+                gridline-color: #F1EBD3;
+                color: {TEXT};
+                font-size: 13px;
+                selection-background-color: {LIGHT_GOLD};
+                selection-color: {NAVY};
+            }}
+
+            #analysisTable::item {{
+                padding: 8px 10px;
+                border-bottom: 1px solid #F1EBD3;
+            }}
+
+            #analysisTable QHeaderView::section {{
+                background: {NAVY};
+                color: {WHITE};
+                padding: 10px 12px;
+                border: none;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+
             /* ── Dialogs & Forms ── */
             QDialog {{
                 background: {CREAM};
@@ -645,6 +827,7 @@ class MainWindow(QMainWindow):
             QDialog QComboBox,
             QDialog QDateEdit,
             QDialog QSpinBox,
+            QDialog QDoubleSpinBox,
             QDialog QPlainTextEdit {{
                 background: {WHITE};
                 color: {TEXT};
@@ -658,17 +841,20 @@ class MainWindow(QMainWindow):
             QDialog QComboBox:focus,
             QDialog QDateEdit:focus,
             QDialog QSpinBox:focus,
+            QDialog QDoubleSpinBox:focus,
             QDialog QPlainTextEdit:focus {{
                 border: 2px solid {NAVY};
             }}
 
-            QSpinBox::up-button, QSpinBox::down-button {{
+            QSpinBox::up-button, QSpinBox::down-button,
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
                 width: 18px;
                 background: {LIGHT_GOLD};
                 border: none;
             }}
 
-            QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover,
+            QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {{
                 background: {GOLD};
             }}
 
@@ -693,6 +879,13 @@ class MainWindow(QMainWindow):
             #primaryDialogButton:pressed,
             QDialogButtonBox QPushButton:default:pressed {{
                 background: #001F3A;
+            }}
+
+            #primaryDialogButton:disabled,
+            QDialogButtonBox QPushButton:default:disabled {{
+                background: #CCCCCC;
+                color: #888888;
+                border-color: #CCCCCC;
             }}
 
             #secondaryDialogButton,
@@ -766,6 +959,12 @@ class MainWindow(QMainWindow):
             self.load_attendance_students()
         elif index == 3:
             self.load_results_tests()
+        elif index == 4:
+            self.load_fees()
+        elif index == 5:
+            self.load_expenses()
+        elif index == 7:
+            self.load_analysis()
 
         for button in self.sidebar_buttons:
             button.setProperty("active", button.property("page_index") == index)
@@ -774,6 +973,13 @@ class MainWindow(QMainWindow):
 
     def on_batch_changed(self):
         self.refresh_dashboard()
+        top_batch = self.batch_selector.currentData()
+        if hasattr(self, "fee_batch_filter"):
+            idx = self.fee_batch_filter.findData(top_batch)
+            if idx >= 0:
+                self.fee_batch_filter.blockSignals(True)
+                self.fee_batch_filter.setCurrentIndex(idx)
+                self.fee_batch_filter.blockSignals(False)
         current_index = self.pages.currentIndex()
         if current_index == 1:
             self.load_students()
@@ -781,6 +987,8 @@ class MainWindow(QMainWindow):
             self.load_attendance_students()
         elif current_index == 3:
             self.load_results_tests()
+        elif current_index == 4:
+            self.load_fees()
 
     def load_batches(self):
         current_selected_batch = self.batch_selector.currentData()
@@ -805,6 +1013,18 @@ class MainWindow(QMainWindow):
 
         self.batch_selector.blockSignals(False)
 
+        if hasattr(self, "fee_batch_filter"):
+            curr_fee_batch = self.fee_batch_filter.currentData()
+            self.fee_batch_filter.blockSignals(True)
+            self.fee_batch_filter.clear()
+            self.fee_batch_filter.addItem("All Batches", None)
+            for batch in batches:
+                self.fee_batch_filter.addItem(batch.name, batch.id)
+            idx = self.fee_batch_filter.findData(curr_fee_batch)
+            if idx >= 0:
+                self.fee_batch_filter.setCurrentIndex(idx)
+            self.fee_batch_filter.blockSignals(False)
+
         self.on_batch_changed()
 
     def create_dashboard_page(self):
@@ -819,7 +1039,15 @@ class MainWindow(QMainWindow):
         header_layout = QVBoxLayout()
         header_layout.setSpacing(4)
 
-        greeting = QLabel("Good afternoon 👋")
+        hour = datetime.now().hour
+        if hour < 12:
+            greeting_text = "Good morning 👋"
+        elif hour < 17:
+            greeting_text = "Good afternoon 👋"
+        else:
+            greeting_text = "Good evening 👋"
+
+        greeting = QLabel(greeting_text)
         greeting.setObjectName("dashboardGreeting")
 
         subtitle = QLabel(
@@ -847,6 +1075,7 @@ class MainWindow(QMainWindow):
             card = QFrame()
             card.setObjectName("dashboardCard")
             card.setMinimumHeight(125)
+            card.setCursor(Qt.CursorShape.PointingHandCursor)
 
             card_layout = QVBoxLayout(card)
             card_layout.setContentsMargins(20, 18, 20, 18)
@@ -859,13 +1088,16 @@ class MainWindow(QMainWindow):
             value_label.setObjectName("dashboardCardValue")
             if title == "Students":
                 self.students_count_label = value_label
-            if title == "Attendance":
+                card.mousePressEvent = lambda e: self.change_page(1)
+            elif title == "Attendance":
                 self.attendance_count_label = value_label
-            if title == "Fees Pending":
+                card.mousePressEvent = lambda e: self.change_page(2)
+            elif title == "Fees Pending":
                 self.fees_pending_label = value_label
-            if title == "Upcoming Tests":
+                card.mousePressEvent = lambda e: self.change_page(4)
+            elif title == "Upcoming Tests":
                 self.upcoming_tests_label = value_label
-            
+                card.mousePressEvent = lambda e: self.change_page(3)
 
             description_label = QLabel(description)
             description_label.setObjectName(
@@ -1042,6 +1274,33 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(edit_results_button, alignment=Qt.AlignmentFlag.AlignVCenter)
         self.edit_results_button = edit_results_button
 
+        delete_test_button = QPushButton("Delete Test")
+        delete_test_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        delete_test_button.setFixedHeight(42)
+        delete_test_button.setEnabled(False)
+        delete_test_button.setStyleSheet("""
+            QPushButton {
+                background: #FEFEFE;
+                color: #DC2626;
+                border: 1px solid #FECACA;
+                border-radius: 8px;
+                padding: 10px 18px;
+                font-weight: 600;
+            }
+            QPushButton:hover:enabled {
+                background: #FEE2E2;
+                border-color: #DC2626;
+            }
+            QPushButton:disabled {
+                color: #BDBDBD;
+                background: #F9F9F9;
+                border-color: #E5E7EB;
+            }
+        """)
+        delete_test_button.clicked.connect(self.delete_selected_test)
+        header_layout.addWidget(delete_test_button, alignment=Qt.AlignmentFlag.AlignVCenter)
+        self.delete_test_button = delete_test_button
+
         layout.addLayout(header_layout)
 
         self.results_tests_table = QTableWidget()
@@ -1090,6 +1349,24 @@ class MainWindow(QMainWindow):
         """)
 
         layout.addWidget(self.results_tests_table)
+
+        self.results_empty_label = QLabel(
+            "No tests found for the selected batch. Click '＋ Create Test' above to add one."
+        )
+        self.results_empty_label.setStyleSheet("""
+            QLabel {
+                color: #615F4B;
+                font-size: 13px;
+                padding: 14px;
+                background: #F8F6EA;
+                border: 1px dashed #D9B85F;
+                border-radius: 8px;
+            }
+        """)
+        self.results_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.results_empty_label.setVisible(False)
+        layout.addWidget(self.results_empty_label)
+
         return page
 
     def load_results_tests(self):
@@ -1128,10 +1405,54 @@ class MainWindow(QMainWindow):
                     item,
                 )
 
+        if hasattr(self, "results_empty_label"):
+            self.results_empty_label.setVisible(len(rows) == 0)
+
+        self.update_check_results_button()
+
     def update_check_results_button(self):
         has_selection = self.results_tests_table.currentRow() >= 0
         self.check_results_button.setEnabled(has_selection)
         self.edit_results_button.setEnabled(has_selection)
+        if hasattr(self, "delete_test_button"):
+            self.delete_test_button.setEnabled(has_selection)
+
+    def delete_selected_test(self):
+        selected_row = self.results_tests_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.information(
+                self,
+                "Select a Test",
+                "Select a test from the table first.",
+            )
+            return
+
+        test_item = self.results_tests_table.item(selected_row, 0)
+        test_id = test_item.data(Qt.ItemDataRole.UserRole)
+        test_name = test_item.text()
+
+        confirm = QMessageBox.question(
+            self,
+            "Confirm Delete Test",
+            f"Are you sure you want to delete test '{test_name}'?\n\nThis will permanently delete the test and all student marks recorded for it.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        with SessionLocal() as session:
+            delete_test(session, int(test_id))
+
+        self.load_results_tests()
+        self.refresh_dashboard()
+
+        QMessageBox.information(
+            self,
+            "Test Deleted",
+            f"Test '{test_name}' and its results have been deleted.",
+        )
 
     def check_selected_test_results(self):
         selected_row = self.results_tests_table.currentRow()
@@ -1555,6 +1876,1351 @@ class MainWindow(QMainWindow):
             f'"{test_name}" has been created successfully.',
         )
 
+    def create_fees_page(self):
+        page = QWidget()
+        page.setObjectName("feesPage")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 28, 30, 28)
+        layout.setSpacing(18)
+
+        # ── Header ─────────────────────────────────────────
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
+        title = QLabel("Fees")
+        title.setObjectName("feesPageTitle")
+        subtitle = QLabel("Track student fees, record payments, and manage monthly obligations.")
+        subtitle.setObjectName("feesPageSubtitle")
+        title_box.addWidget(title)
+        title_box.addWidget(subtitle)
+        header_layout.addLayout(title_box)
+        header_layout.addStretch()
+
+        # Action Buttons
+        generate_btn = QPushButton("＋ Generate Monthly Fees")
+        generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        generate_btn.setFixedHeight(40)
+        generate_btn.setStyleSheet("""
+            QPushButton {
+                background: #012D54;
+                color: #FEFEFE;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #04294D;
+            }
+        """)
+        generate_btn.clicked.connect(self.open_generate_fees_dialog)
+        header_layout.addWidget(generate_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        add_fee_btn = QPushButton("＋ Add Fee")
+        add_fee_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_fee_btn.setFixedHeight(40)
+        add_fee_btn.setStyleSheet("""
+            QPushButton {
+                background: #E9DEBA;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #D9B85F;
+            }
+        """)
+        add_fee_btn.clicked.connect(self.open_create_fee_dialog)
+        header_layout.addWidget(add_fee_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        export_btn = QPushButton("📥 Export CSV")
+        export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        export_btn.setFixedHeight(40)
+        export_btn.setStyleSheet("""
+            QPushButton {
+                background: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #E9DEBA;
+            }
+        """)
+        export_btn.clicked.connect(self.export_fees_csv)
+        header_layout.addWidget(export_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        layout.addLayout(header_layout)
+
+        # ── KPI Cards ──────────────────────────────────────
+        kpi_layout = QGridLayout()
+        kpi_layout.setHorizontalSpacing(15)
+        kpi_layout.setVerticalSpacing(10)
+
+        def make_fee_kpi_card(card_title, default_val, text_color="#012D54"):
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
+                    background-color: #FEFEFE;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 10px;
+                }
+            """)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(18, 14, 18, 14)
+            c_layout.setSpacing(4)
+            c_title = QLabel(card_title)
+            c_title.setStyleSheet("color: #615F4B; font-size: 12px; font-weight: 600;")
+            c_val = QLabel(default_val)
+            c_val.setStyleSheet(f"color: {text_color}; font-size: 22px; font-weight: 700;")
+            c_layout.addWidget(c_title)
+            c_layout.addWidget(c_val)
+            return card, c_val
+
+        card1, self.fees_kpi_total_due = make_fee_kpi_card("Total Fees Due", "₹0.00", "#012D54")
+        card2, self.fees_kpi_collected = make_fee_kpi_card("Total Collected", "₹0.00", "#16A34A")
+        card3, self.fees_kpi_outstanding = make_fee_kpi_card("Total Outstanding", "₹0.00", "#D97706")
+        card4, self.fees_kpi_overdue = make_fee_kpi_card("Total Overdue", "₹0.00", "#DC2626")
+
+        kpi_layout.addWidget(card1, 0, 0)
+        kpi_layout.addWidget(card2, 0, 1)
+        kpi_layout.addWidget(card3, 0, 2)
+        kpi_layout.addWidget(card4, 0, 3)
+
+        layout.addLayout(kpi_layout)
+
+        # ── Filters & Search Toolbar ───────────────────────
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(10)
+
+        self.fee_search_input = QLineEdit()
+        self.fee_search_input.setPlaceholderText("Search by student name or admission no...")
+        self.fee_search_input.setClearButtonEnabled(True)
+        self.fee_search_input.setFixedHeight(36)
+        self.fee_search_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #E9DEBA;
+                border-radius: 7px;
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1.5px solid #012D54;
+            }
+        """)
+        self.fee_search_input.textChanged.connect(self.load_fees)
+        toolbar.addWidget(self.fee_search_input, 2)
+
+        # Batch filter
+        self.fee_batch_filter = QComboBox()
+        self.fee_batch_filter.setFixedHeight(36)
+        self.fee_batch_filter.addItem("All Batches", None)
+        with SessionLocal() as session:
+            batches = get_active_batches(session)
+            for b in batches:
+                self.fee_batch_filter.addItem(b.name, b.id)
+        self.fee_batch_filter.currentIndexChanged.connect(self.load_fees)
+        toolbar.addWidget(self.fee_batch_filter, 1)
+
+        # Month filter
+        self.fee_month_filter = QComboBox()
+        self.fee_month_filter.setFixedHeight(36)
+        self.fee_month_filter.addItem("All Months", None)
+        for i, m in enumerate(MONTH_NAMES, start=1):
+            self.fee_month_filter.addItem(m, i)
+        self.fee_month_filter.currentIndexChanged.connect(self.load_fees)
+        toolbar.addWidget(self.fee_month_filter, 1)
+
+        # Status filter
+        self.fee_status_filter = QComboBox()
+        self.fee_status_filter.setFixedHeight(36)
+        self.fee_status_filter.addItem("All Statuses", "ALL")
+        self.fee_status_filter.addItem("Unpaid / Pending", "PENDING")
+        self.fee_status_filter.addItem("Partially Paid", "PARTIALLY_PAID")
+        self.fee_status_filter.addItem("Paid", "PAID")
+        self.fee_status_filter.addItem("Overdue", "OVERDUE")
+        self.fee_status_filter.currentIndexChanged.connect(self.load_fees)
+        toolbar.addWidget(self.fee_status_filter, 1)
+
+        # Reset button
+        reset_btn = QPushButton("Reset")
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFixedHeight(36)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FEFEFE;
+                color: #615F4B;
+                border: 1px solid #E9DEBA;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #E9DEBA;
+                color: #012D54;
+            }
+        """)
+        reset_btn.clicked.connect(self.reset_fee_filters)
+        toolbar.addWidget(reset_btn)
+
+        layout.addLayout(toolbar)
+
+        # ── Fees Table ─────────────────────────────────────
+        self.fees_table = QTableWidget()
+        self.fees_table.setObjectName("feesTable")
+        self.fees_table.setColumnCount(10)
+        self.fees_table.setHorizontalHeaderLabels([
+            "Admission No.",
+            "Student Name",
+            "Batch",
+            "Fee Period",
+            "Total Fee",
+            "Paid",
+            "Outstanding",
+            "Due Date",
+            "Status",
+            "Actions",
+        ])
+        self.fees_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.fees_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.fees_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.fees_table.verticalHeader().setVisible(False)
+        self.fees_table.verticalHeader().setDefaultSectionSize(48)
+        self.fees_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.fees_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.fees_table.setStyleSheet("""
+            QTableWidget {
+                background: #FEFEFE;
+                border: 1px solid #E9DEBA;
+                border-radius: 8px;
+                gridline-color: #F1EBD3;
+                font-size: 13px;
+                color: #1F2937;
+            }
+            QTableWidget::item {
+                padding: 6px 8px;
+                border-bottom: 1px solid #F1EBD3;
+            }
+            QHeaderView::section {
+                background: #012D54;
+                color: #FEFEFE;
+                padding: 9px 8px;
+                border: none;
+                font-weight: 600;
+                font-size: 12px;
+            }
+        """)
+
+        h = self.fees_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(9, QHeaderView.ResizeMode.ResizeToContents)
+
+        layout.addWidget(self.fees_table, 1)
+
+        # Empty state label
+        self.fees_empty_label = QLabel(
+            "No fee obligations match the current filters. Click '＋ Generate Monthly Fees' above to generate fees."
+        )
+        self.fees_empty_label.setStyleSheet("""
+            QLabel {
+                color: #615F4B;
+                font-size: 13px;
+                padding: 14px;
+                background: #F8F6EA;
+                border: 1px dashed #D9B85F;
+                border-radius: 8px;
+            }
+        """)
+        self.fees_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.fees_empty_label.setVisible(False)
+        layout.addWidget(self.fees_empty_label)
+
+        return page
+
+    def load_fees(self):
+        if not hasattr(self, "fees_table"):
+            return
+
+        search = self.fee_search_input.text().strip() or None
+        batch_id = self.fee_batch_filter.currentData()
+        if batch_id is None and self.batch_selector.currentData() is not None:
+            batch_id = self.batch_selector.currentData()
+
+        month = self.fee_month_filter.currentData()
+        status = self.fee_status_filter.currentData()
+        overdue_only = (status == "OVERDUE")
+
+        with SessionLocal() as session:
+            fees = get_fees(
+                session,
+                batch_id=batch_id,
+                fee_month=month,
+                status=status,
+                search=search,
+                overdue_only=overdue_only,
+            )
+            summary = get_fees_summary(
+                session,
+                batch_id=batch_id,
+                fee_month=month,
+                search=search,
+            )
+
+        # Update KPI Cards
+        self.fees_kpi_total_due.setText(f"₹{summary['total_due']:,.2f}")
+        self.fees_kpi_collected.setText(f"₹{summary['total_collected']:,.2f}")
+        self.fees_kpi_outstanding.setText(f"₹{summary['total_outstanding']:,.2f}")
+        self.fees_kpi_overdue.setText(f"₹{summary['total_overdue']:,.2f}")
+
+        # Update table rows
+        self.fees_table.setRowCount(len(fees))
+        for row, fee in enumerate(fees):
+            student_name = f"{fee.student.first_name} {fee.student.last_name or ''}".strip() if fee.student else "Unknown"
+            adm_no = fee.student.admission_number if fee.student else "-"
+            batch_name = fee.batch.name if fee.batch else "-"
+            month_name = MONTH_NAMES[fee.fee_month - 1] if (1 <= fee.fee_month <= 12) else f"M{fee.fee_month}"
+            period_str = f"{month_name} {fee.academic_year}"
+
+            adm_item = QTableWidgetItem(adm_no)
+            adm_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.fees_table.setItem(row, 0, adm_item)
+
+            name_item = QTableWidgetItem(student_name)
+            name_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            self.fees_table.setItem(row, 1, name_item)
+
+            batch_item = QTableWidgetItem(batch_name)
+            batch_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.fees_table.setItem(row, 2, batch_item)
+
+            period_item = QTableWidgetItem(period_str)
+            period_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.fees_table.setItem(row, 3, period_item)
+
+            due_item = QTableWidgetItem(f"₹{fee.final_amount_due:,.2f}")
+            due_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.fees_table.setItem(row, 4, due_item)
+
+            paid_item = QTableWidgetItem(f"₹{fee.total_paid:,.2f}")
+            paid_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.fees_table.setItem(row, 5, paid_item)
+
+            bal_val = fee.outstanding_balance
+            bal_item = QTableWidgetItem(f"₹{bal_val:,.2f}")
+            bal_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if bal_val > 0:
+                bal_item.setForeground(Qt.GlobalColor.darkRed)
+            self.fees_table.setItem(row, 6, bal_item)
+
+            due_date_str = fee.due_date.strftime("%d %b %Y") if fee.due_date else "—"
+            date_item = QTableWidgetItem(due_date_str)
+            date_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.fees_table.setItem(row, 7, date_item)
+
+            # Status Badge Widget
+            status_calc = fee.calculate_status()
+            status_widget = QWidget()
+            status_layout = QHBoxLayout(status_widget)
+            status_layout.setContentsMargins(0, 0, 0, 0)
+            status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            status_badge = QLabel()
+            status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            if status_calc == "PAID":
+                status_badge.setText("Paid")
+                status_badge.setStyleSheet("background-color: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+            elif status_calc == "PARTIALLY_PAID":
+                status_badge.setText("Partial")
+                status_badge.setStyleSheet("background-color: #FEF3C7; color: #B45309; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+            elif status_calc == "OVERDUE":
+                status_badge.setText("Overdue")
+                status_badge.setStyleSheet("background-color: #FEE2E2; color: #B91C1C; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+            else:
+                status_badge.setText("Unpaid")
+                status_badge.setStyleSheet("background-color: #DBEAFE; color: #1D4ED8; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+
+            status_layout.addWidget(status_badge)
+            self.fees_table.setCellWidget(row, 8, status_widget)
+
+            # Action Buttons Widget
+            action_widget = QWidget()
+            action_layout = QHBoxLayout(action_widget)
+            action_layout.setContentsMargins(4, 2, 4, 2)
+            action_layout.setSpacing(6)
+            action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            pay_btn = QPushButton("Pay")
+            pay_btn.setFixedSize(52, 28)
+            pay_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            pay_btn.setEnabled(bal_val > 0)
+            pay_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #012D54;
+                    color: #FEFEFE;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover:enabled {
+                    background-color: #04294D;
+                }
+                QPushButton:disabled {
+                    background-color: #E5E7EB;
+                    color: #9CA3AF;
+                }
+            """)
+            pay_btn.clicked.connect(lambda ch, fid=fee.id: self.open_record_payment_dialog(fid))
+            action_layout.addWidget(pay_btn)
+
+            hist_btn = QPushButton("History")
+            hist_btn.setFixedSize(60, 28)
+            hist_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            hist_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E9DEBA;
+                    color: #012D54;
+                    border: 1px solid #D9B85F;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #D9B85F;
+                }
+            """)
+            hist_btn.clicked.connect(lambda ch, fid=fee.id: self.open_payment_history_dialog(fid))
+            action_layout.addWidget(hist_btn)
+
+            edit_btn = QPushButton("Edit")
+            edit_btn.setFixedSize(48, 28)
+            edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #FEFEFE;
+                    color: #012D54;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #F1EBD3;
+                }
+            """)
+            edit_btn.clicked.connect(lambda ch, fid=fee.id: self.open_edit_fee_dialog(fid))
+            action_layout.addWidget(edit_btn)
+
+            self.fees_table.setCellWidget(row, 9, action_widget)
+
+        self.fees_empty_label.setVisible(len(fees) == 0)
+
+    def export_fees_csv(self):
+        default_filename = f"fees_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Fees to CSV",
+            default_filename,
+            "CSV Files (*.csv)",
+        )
+        if not filepath:
+            return
+
+        search = self.fee_search_input.text().strip() or None
+        batch_id = self.fee_batch_filter.currentData()
+        if batch_id is None and self.batch_selector.currentData() is not None:
+            batch_id = self.batch_selector.currentData()
+        month = self.fee_month_filter.currentData()
+        status = self.fee_status_filter.currentData()
+        overdue_only = (status == "OVERDUE")
+
+        with SessionLocal() as session:
+            fees = get_fees(
+                session,
+                batch_id=batch_id,
+                fee_month=month,
+                status=status,
+                search=search,
+                overdue_only=overdue_only,
+            )
+
+            try:
+                with open(filepath, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        "Admission No.",
+                        "Student Name",
+                        "Batch",
+                        "Academic Year",
+                        "Fee Month",
+                        "Base Amount (INR)",
+                        "Discount (INR)",
+                        "Final Amount Due (INR)",
+                        "Total Paid (INR)",
+                        "Outstanding (INR)",
+                        "Due Date",
+                        "Status",
+                        "Notes",
+                    ])
+                    for fee in fees:
+                        student_name = f"{fee.student.first_name} {fee.student.last_name or ''}".strip() if fee.student else ""
+                        month_name = MONTH_NAMES[fee.fee_month - 1] if (1 <= fee.fee_month <= 12) else str(fee.fee_month)
+                        writer.writerow([
+                            fee.student.admission_number if fee.student else "",
+                            student_name,
+                            fee.batch.name if fee.batch else "",
+                            fee.academic_year,
+                            month_name,
+                            f"{fee.amount_due:.2f}",
+                            f"{fee.discount:.2f}",
+                            f"{fee.final_amount_due:.2f}",
+                            f"{fee.total_paid:.2f}",
+                            f"{fee.outstanding_balance:.2f}",
+                            fee.due_date.strftime("%Y-%m-%d") if fee.due_date else "",
+                            fee.calculate_status(),
+                            fee.notes or "",
+                        ])
+
+                QMessageBox.information(
+                    self,
+                    "Export Successful",
+                    f"Successfully exported {len(fees)} fee record(s) to:\n{filepath}",
+                )
+            except Exception as e:
+                QMessageBox.critical(self, "Export Failed", f"Failed to export CSV: {e}")
+
+    def reset_fee_filters(self):
+        self.fee_search_input.blockSignals(True)
+        self.fee_batch_filter.blockSignals(True)
+        self.fee_month_filter.blockSignals(True)
+        self.fee_status_filter.blockSignals(True)
+
+        self.fee_search_input.clear()
+        self.fee_batch_filter.setCurrentIndex(0)
+        self.fee_month_filter.setCurrentIndex(0)
+        self.fee_status_filter.setCurrentIndex(0)
+
+        self.fee_search_input.blockSignals(False)
+        self.fee_batch_filter.blockSignals(False)
+        self.fee_month_filter.blockSignals(False)
+        self.fee_status_filter.blockSignals(False)
+
+        self.load_fees()
+
+    def open_generate_fees_dialog(self):
+        dialog = GenerateFeesDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_fees()
+            self.refresh_dashboard()
+
+    def open_create_fee_dialog(self):
+        dialog = CreateFeeDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_fees()
+            self.refresh_dashboard()
+
+    def open_record_payment_dialog(self, fee_id: int):
+        dialog = RecordPaymentDialog(fee_id, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_fees()
+            self.refresh_dashboard()
+
+    def open_payment_history_dialog(self, fee_id: int):
+        dialog = PaymentHistoryDialog(fee_id, self)
+        dialog.exec()
+        self.load_fees()
+        self.refresh_dashboard()
+
+    def open_edit_fee_dialog(self, fee_id: int):
+        dialog = EditFeeDialog(fee_id, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_fees()
+            self.refresh_dashboard()
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # ── EXPENSES MODULE ──────────────────────────────────────────────────────
+    # ═════════════════════════════════════════════════════════════════════════
+
+    def create_expenses_page(self):
+        page = QWidget()
+        page.setObjectName("expensesPage")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 28, 30, 28)
+        layout.setSpacing(18)
+
+        # ── Header ─────────────────────────────────────────
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
+        title = QLabel("Expenses")
+        title.setObjectName("expensesPageTitle")
+        subtitle = QLabel("Track coaching expenses, manage vendor liabilities, and control operating cash flow.")
+        subtitle.setObjectName("expensesPageSubtitle")
+        title_box.addWidget(title)
+        title_box.addWidget(subtitle)
+        header_layout.addLayout(title_box)
+        header_layout.addStretch()
+
+        # Action Buttons
+        add_exp_btn = QPushButton("＋ Add Expense")
+        add_exp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_exp_btn.setFixedHeight(40)
+        add_exp_btn.setStyleSheet("""
+            QPushButton {
+                background: #012D54;
+                color: #FEFEFE;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #04294D;
+            }
+        """)
+        add_exp_btn.clicked.connect(self.open_add_expense_dialog)
+        header_layout.addWidget(add_exp_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        overview_btn = QPushButton("📊 Financial Overview")
+        overview_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        overview_btn.setFixedHeight(40)
+        overview_btn.setStyleSheet("""
+            QPushButton {
+                background: #E9DEBA;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #D9B85F;
+            }
+        """)
+        overview_btn.clicked.connect(self.open_financial_analysis_dialog)
+        header_layout.addWidget(overview_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        export_btn = QPushButton("📥 Export CSV")
+        export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        export_btn.setFixedHeight(40)
+        export_btn.setStyleSheet("""
+            QPushButton {
+                background: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #E9DEBA;
+            }
+        """)
+        export_btn.clicked.connect(self.export_expenses_csv)
+        header_layout.addWidget(export_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        layout.addLayout(header_layout)
+
+        # ── KPI Cards ──────────────────────────────────────
+        kpi_layout = QGridLayout()
+        kpi_layout.setHorizontalSpacing(15)
+        kpi_layout.setVerticalSpacing(10)
+
+        def make_expense_kpi_card(card_title, default_val, text_color="#012D54"):
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
+                    background-color: #FEFEFE;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 10px;
+                }
+            """)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(18, 14, 18, 14)
+            c_layout.setSpacing(4)
+            c_title = QLabel(card_title)
+            c_title.setStyleSheet("color: #615F4B; font-size: 12px; font-weight: 600;")
+            c_val = QLabel(default_val)
+            c_val.setStyleSheet(f"color: {text_color}; font-size: 22px; font-weight: 700;")
+            c_layout.addWidget(c_title)
+            c_layout.addWidget(c_val)
+            return card, c_val
+
+        c1, self.expenses_kpi_total = make_expense_kpi_card("Total Expenses Incurred", "₹0.00", "#012D54")
+        c2, self.expenses_kpi_paid = make_expense_kpi_card("Total Paid Out", "₹0.00", "#16A34A")
+        c3, self.expenses_kpi_outstanding = make_expense_kpi_card("Outstanding Payables", "₹0.00", "#D97706")
+        c4, self.expenses_kpi_month = make_expense_kpi_card("This Month Expenses", "₹0.00", "#2563EB")
+
+        kpi_layout.addWidget(c1, 0, 0)
+        kpi_layout.addWidget(c2, 0, 1)
+        kpi_layout.addWidget(c3, 0, 2)
+        kpi_layout.addWidget(c4, 0, 3)
+
+        layout.addLayout(kpi_layout)
+
+        # ── Filters & Search Toolbar ───────────────────────
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(10)
+
+        self.expense_search_input = QLineEdit()
+        self.expense_search_input.setPlaceholderText("Search by description, vendor, payee...")
+        self.expense_search_input.setClearButtonEnabled(True)
+        self.expense_search_input.setFixedHeight(36)
+        self.expense_search_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #E9DEBA;
+                border-radius: 7px;
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1.5px solid #012D54;
+            }
+        """)
+        self.expense_search_input.textChanged.connect(self.load_expenses)
+        toolbar.addWidget(self.expense_search_input, 2)
+
+        # Category filter
+        self.expense_category_filter = QComboBox()
+        self.expense_category_filter.setFixedHeight(36)
+        self.expense_category_filter.addItem("All Categories", None)
+        for cat in DEFAULT_EXPENSE_CATEGORIES:
+            self.expense_category_filter.addItem(cat, cat)
+        self.expense_category_filter.currentIndexChanged.connect(self.load_expenses)
+        toolbar.addWidget(self.expense_category_filter, 1)
+
+        # Status filter
+        self.expense_status_filter = QComboBox()
+        self.expense_status_filter.setFixedHeight(36)
+        self.expense_status_filter.addItem("All Statuses", "ALL")
+        self.expense_status_filter.addItem("Unpaid / Pending", "PENDING")
+        self.expense_status_filter.addItem("Partially Paid", "PARTIALLY_PAID")
+        self.expense_status_filter.addItem("Paid", "PAID")
+        self.expense_status_filter.addItem("Overdue", "OVERDUE")
+        self.expense_status_filter.currentIndexChanged.connect(self.load_expenses)
+        toolbar.addWidget(self.expense_status_filter, 1)
+
+        # Payment Method filter
+        self.expense_method_filter = QComboBox()
+        self.expense_method_filter.setFixedHeight(36)
+        self.expense_method_filter.addItem("All Payment Methods", "ALL")
+        for m in EXPENSE_PAYMENT_METHODS:
+            self.expense_method_filter.addItem(m, m)
+        self.expense_method_filter.currentIndexChanged.connect(self.load_expenses)
+        toolbar.addWidget(self.expense_method_filter, 1)
+
+        # Reset button
+        reset_btn = QPushButton("Reset")
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFixedHeight(36)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FEFEFE;
+                color: #615F4B;
+                border: 1px solid #E9DEBA;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #E9DEBA;
+                color: #012D54;
+            }
+        """)
+        reset_btn.clicked.connect(self.reset_expense_filters)
+        toolbar.addWidget(reset_btn)
+
+        layout.addLayout(toolbar)
+
+        # ── Expenses Table ─────────────────────────────────
+        self.expenses_table = QTableWidget()
+        self.expenses_table.setObjectName("expensesTable")
+        self.expenses_table.setColumnCount(10)
+        self.expenses_table.setHorizontalHeaderLabels([
+            "Date",
+            "Description",
+            "Category",
+            "Payee / Vendor",
+            "Total Amount",
+            "Paid",
+            "Outstanding",
+            "Due Date",
+            "Status",
+            "Actions",
+        ])
+        self.expenses_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.expenses_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.expenses_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.expenses_table.verticalHeader().setVisible(False)
+        self.expenses_table.verticalHeader().setDefaultSectionSize(48)
+        self.expenses_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.expenses_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        h = self.expenses_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(9, QHeaderView.ResizeMode.ResizeToContents)
+
+        layout.addWidget(self.expenses_table, 1)
+
+        # Empty state label
+        self.expenses_empty_label = QLabel(
+            "No expenses match the current filters. Click '＋ Add Expense' above to record a new coaching expense."
+        )
+        self.expenses_empty_label.setStyleSheet("""
+            QLabel {
+                color: #615F4B;
+                font-size: 13px;
+                padding: 14px;
+                background: #F8F6EA;
+                border: 1px dashed #D9B85F;
+                border-radius: 8px;
+            }
+        """)
+        self.expenses_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.expenses_empty_label.setVisible(False)
+        layout.addWidget(self.expenses_empty_label)
+
+        return page
+
+    def load_expenses(self):
+        if not hasattr(self, "expenses_table"):
+            return
+
+        search = self.expense_search_input.text().strip() or None
+        category = self.expense_category_filter.currentData()
+        status = self.expense_status_filter.currentData()
+        method = self.expense_method_filter.currentData()
+
+        with SessionLocal() as session:
+            expenses = get_expenses(
+                session,
+                search=search,
+                category=category,
+                payment_status=status,
+                payment_method=method,
+            )
+            summary = get_expenses_summary(
+                session,
+                search=search,
+                category=category,
+            )
+
+        # Update KPI Cards
+        self.expenses_kpi_total.setText(f"₹{summary['total_expenses']:,.2f}")
+        self.expenses_kpi_paid.setText(f"₹{summary['total_paid']:,.2f}")
+        self.expenses_kpi_outstanding.setText(f"₹{summary['total_outstanding']:,.2f}")
+        self.expenses_kpi_month.setText(f"₹{summary['current_month_expenses']:,.2f}")
+
+        # Update table rows
+        self.expenses_table.setRowCount(len(expenses))
+        for row, exp in enumerate(expenses):
+            date_str = exp.expense_date.strftime("%d %b %Y") if exp.expense_date else "—"
+            date_item = QTableWidgetItem(date_str)
+            date_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.expenses_table.setItem(row, 0, date_item)
+
+            desc_item = QTableWidgetItem(exp.description)
+            desc_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            self.expenses_table.setItem(row, 1, desc_item)
+
+            cat_item = QTableWidgetItem(exp.category)
+            cat_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.expenses_table.setItem(row, 2, cat_item)
+
+            payee_item = QTableWidgetItem(exp.payee or "—")
+            payee_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.expenses_table.setItem(row, 3, payee_item)
+
+            amt_item = QTableWidgetItem(f"₹{exp.amount:,.2f}")
+            amt_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.expenses_table.setItem(row, 4, amt_item)
+
+            paid_item = QTableWidgetItem(f"₹{exp.total_paid:,.2f}")
+            paid_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.expenses_table.setItem(row, 5, paid_item)
+
+            bal_val = exp.outstanding_balance
+            bal_item = QTableWidgetItem(f"₹{bal_val:,.2f}")
+            bal_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if bal_val > 0:
+                bal_item.setForeground(Qt.GlobalColor.darkRed)
+            self.expenses_table.setItem(row, 6, bal_item)
+
+            due_date_str = exp.due_date.strftime("%d %b %Y") if exp.due_date else "—"
+            due_item = QTableWidgetItem(due_date_str)
+            due_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.expenses_table.setItem(row, 7, due_item)
+
+            # Status Badge Widget
+            status_calc = exp.calculate_status()
+            status_widget = QWidget()
+            status_layout = QHBoxLayout(status_widget)
+            status_layout.setContentsMargins(0, 0, 0, 0)
+            status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            status_badge = QLabel()
+            status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            if status_calc == "PAID":
+                status_badge.setText("Paid")
+                status_badge.setStyleSheet("background-color: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+            elif status_calc == "PARTIALLY_PAID":
+                status_badge.setText("Partial")
+                status_badge.setStyleSheet("background-color: #FEF3C7; color: #B45309; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+            elif status_calc == "OVERDUE":
+                status_badge.setText("Overdue")
+                status_badge.setStyleSheet("background-color: #FEE2E2; color: #B91C1C; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+            elif status_calc == "VOID":
+                status_badge.setText("Void")
+                status_badge.setStyleSheet("background-color: #F3F4F6; color: #6B7280; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+            else:
+                status_badge.setText("Unpaid")
+                status_badge.setStyleSheet("background-color: #DBEAFE; color: #1D4ED8; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px;")
+
+            status_layout.addWidget(status_badge)
+            self.expenses_table.setCellWidget(row, 8, status_widget)
+
+            # Action Buttons Widget
+            action_widget = QWidget()
+            action_layout = QHBoxLayout(action_widget)
+            action_layout.setContentsMargins(4, 2, 4, 2)
+            action_layout.setSpacing(6)
+            action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            pay_btn = QPushButton("Pay")
+            pay_btn.setFixedSize(50, 28)
+            pay_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            pay_btn.setEnabled(bal_val > 0 and status_calc != "VOID")
+            pay_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #012D54;
+                    color: #FEFEFE;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover:enabled {
+                    background-color: #04294D;
+                }
+                QPushButton:disabled {
+                    background-color: #E5E7EB;
+                    color: #9CA3AF;
+                }
+            """)
+            pay_btn.clicked.connect(lambda ch, eid=exp.id: self.open_record_expense_payment_dialog(eid))
+            action_layout.addWidget(pay_btn)
+
+            hist_btn = QPushButton("History")
+            hist_btn.setFixedSize(58, 28)
+            hist_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            hist_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E9DEBA;
+                    color: #012D54;
+                    border: 1px solid #D9B85F;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #D9B85F;
+                }
+            """)
+            hist_btn.clicked.connect(lambda ch, eid=exp.id: self.open_expense_payment_history_dialog(eid))
+            action_layout.addWidget(hist_btn)
+
+            edit_btn = QPushButton("Edit")
+            edit_btn.setFixedSize(46, 28)
+            edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #FEFEFE;
+                    color: #012D54;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #F1EBD3;
+                }
+            """)
+            edit_btn.clicked.connect(lambda ch, eid=exp.id: self.open_edit_expense_dialog(eid))
+            action_layout.addWidget(edit_btn)
+
+            del_btn = QPushButton("Delete")
+            del_btn.setFixedSize(54, 28)
+            del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            del_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #FEE2E2;
+                    color: #B91C1C;
+                    border: 1px solid #FCA5A5;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #FECACA;
+                }
+            """)
+            del_btn.clicked.connect(lambda ch, eid=exp.id: self.confirm_delete_expense(eid))
+            action_layout.addWidget(del_btn)
+
+            self.expenses_table.setCellWidget(row, 9, action_widget)
+
+        self.expenses_empty_label.setVisible(len(expenses) == 0)
+
+    def reset_expense_filters(self):
+        if not hasattr(self, "expense_search_input"):
+            return
+        self.expense_search_input.blockSignals(True)
+        self.expense_category_filter.blockSignals(True)
+        self.expense_status_filter.blockSignals(True)
+        self.expense_method_filter.blockSignals(True)
+
+        self.expense_search_input.clear()
+        self.expense_category_filter.setCurrentIndex(0)
+        self.expense_status_filter.setCurrentIndex(0)
+        self.expense_method_filter.setCurrentIndex(0)
+
+        self.expense_search_input.blockSignals(False)
+        self.expense_category_filter.blockSignals(False)
+        self.expense_status_filter.blockSignals(False)
+        self.expense_method_filter.blockSignals(False)
+
+        self.load_expenses()
+
+    def export_expenses_csv(self):
+        default_filename = f"expenses_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Expenses to CSV",
+            default_filename,
+            "CSV Files (*.csv)",
+        )
+        if not filepath:
+            return
+
+        search = self.expense_search_input.text().strip() or None
+        cat = self.expense_category_filter.currentData()
+        status = self.expense_status_filter.currentData()
+
+        with SessionLocal() as session:
+            try:
+                count = export_expenses_csv(
+                    session,
+                    filepath,
+                    search=search,
+                    category=cat,
+                    payment_status=status,
+                )
+                QMessageBox.information(
+                    self,
+                    "Export Successful",
+                    f"Successfully exported {count} expense record(s) to:\n{filepath}",
+                )
+            except Exception as e:
+                QMessageBox.critical(self, "Export Failed", f"Failed to export CSV: {e}")
+
+    def open_add_expense_dialog(self):
+        dialog = AddExpenseDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_expenses()
+            self.refresh_dashboard()
+
+    def open_edit_expense_dialog(self, expense_id: int):
+        dialog = EditExpenseDialog(expense_id, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_expenses()
+            self.refresh_dashboard()
+
+    def open_record_expense_payment_dialog(self, expense_id: int):
+        dialog = RecordExpensePaymentDialog(expense_id, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_expenses()
+            self.refresh_dashboard()
+
+    def open_expense_payment_history_dialog(self, expense_id: int):
+        dialog = ExpensePaymentHistoryDialog(expense_id, self)
+        dialog.exec()
+        self.load_expenses()
+        self.refresh_dashboard()
+
+    def confirm_delete_expense(self, expense_id: int):
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            "Are you sure you want to delete this expense record?\nThis action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            with SessionLocal() as session:
+                try:
+                    deleted = delete_expense(session, expense_id)
+                    if deleted:
+                        QMessageBox.information(self, "Deleted", "Expense record deleted successfully.")
+                        self.load_expenses()
+                        self.refresh_dashboard()
+                except ValueError as ve:
+                    QMessageBox.warning(self, "Cannot Delete", str(ve))
+                except Exception as ex:
+                    QMessageBox.critical(self, "Error", f"Failed to delete expense: {ex}")
+
+    def open_financial_analysis_dialog(self):
+        dialog = FinancialAnalysisDialog(self)
+        dialog.exec()
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # ── FINANCIAL ANALYSIS PAGE (PAGE 7) ────────────────────────────────────
+    # ═════════════════════════════════════════════════════════════════════════
+
+    def create_analysis_page(self):
+        page = QWidget()
+        page.setObjectName("analysisPage")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 28, 30, 28)
+        layout.setSpacing(18)
+
+        # ── Header ─────────────────────────────────────────
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
+        title = QLabel("Financial Analysis")
+        title.setObjectName("analysisPageTitle")
+        subtitle = QLabel("Integrated cash flow, fee collections vs operating expenses, and monthly performance.")
+        subtitle.setObjectName("analysisPageSubtitle")
+        title_box.addWidget(title)
+        title_box.addWidget(subtitle)
+        header_layout.addLayout(title_box)
+        header_layout.addStretch()
+
+        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        refresh_btn.setFixedHeight(40)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: #012D54;
+                color: #FEFEFE;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #04294D;
+            }
+        """)
+        refresh_btn.clicked.connect(self.load_analysis)
+        header_layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        modal_btn = QPushButton("📊 Deep-Dive Report")
+        modal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        modal_btn.setFixedHeight(40)
+        modal_btn.setStyleSheet("""
+            QPushButton {
+                background: #E9DEBA;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #D9B85F;
+            }
+        """)
+        modal_btn.clicked.connect(self.open_financial_analysis_dialog)
+        header_layout.addWidget(modal_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        layout.addLayout(header_layout)
+
+        # ── KPI Cards Grid (6 Cards) ───────────────────────
+        kpi_grid = QGridLayout()
+        kpi_grid.setHorizontalSpacing(15)
+        kpi_grid.setVerticalSpacing(12)
+
+        def make_analysis_kpi_card(card_title, default_val, text_color="#012D54"):
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
+                    background-color: #FEFEFE;
+                    border: 1px solid #E9DEBA;
+                    border-radius: 10px;
+                }
+            """)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(18, 14, 18, 14)
+            c_layout.setSpacing(4)
+            c_title = QLabel(card_title)
+            c_title.setStyleSheet("color: #615F4B; font-size: 12px; font-weight: 600;")
+            c_val = QLabel(default_val)
+            c_val.setStyleSheet(f"color: {text_color}; font-size: 20px; font-weight: 700;")
+            c_layout.addWidget(c_title)
+            c_layout.addWidget(c_val)
+            return card, c_val
+
+        c_inflow, self.analysis_kpi_inflow = make_analysis_kpi_card("Cash Received (Fee Inflow)", "₹0.00", "#16A34A")
+        c_outflow, self.analysis_kpi_outflow = make_analysis_kpi_card("Cash Paid (Expense Outflow)", "₹0.00", "#DC2626")
+        c_netcash, self.analysis_kpi_net_cash = make_analysis_kpi_card("Net Cash Flow", "₹0.00", "#012D54")
+        c_receivables, self.analysis_kpi_receivables = make_analysis_kpi_card("Student Fees Receivable", "₹0.00", "#D97706")
+        c_payables, self.analysis_kpi_payables = make_analysis_kpi_card("Vendor Payables Due", "₹0.00", "#DC2626")
+        c_accrual, self.analysis_kpi_accrual = make_analysis_kpi_card("Net Accrual Margin", "₹0.00", "#2563EB")
+
+        kpi_grid.addWidget(c_inflow, 0, 0)
+        kpi_grid.addWidget(c_outflow, 0, 1)
+        kpi_grid.addWidget(c_netcash, 0, 2)
+        kpi_grid.addWidget(c_receivables, 1, 0)
+        kpi_grid.addWidget(c_payables, 1, 1)
+        kpi_grid.addWidget(c_accrual, 1, 2)
+
+        layout.addLayout(kpi_grid)
+
+        # ── Monthly Comparison Table ───────────────────────
+        tbl_label = QLabel("Monthly Performance Trend (Fees vs. Expenses)")
+        tbl_label.setStyleSheet("color: #012D54; font-size: 16px; font-weight: 700; margin-top: 8px;")
+        layout.addWidget(tbl_label)
+
+        self.analysis_table = QTableWidget()
+        self.analysis_table.setObjectName("analysisTable")
+        self.analysis_table.setColumnCount(7)
+        self.analysis_table.setHorizontalHeaderLabels([
+            "Month",
+            "Fees Collected (Cash)",
+            "Expenses Paid (Cash)",
+            "Net Cash Flow",
+            "Fees Billed",
+            "Expenses Incurred",
+            "Accrual Margin",
+        ])
+        self.analysis_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.analysis_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.analysis_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.analysis_table.verticalHeader().setVisible(False)
+        self.analysis_table.verticalHeader().setDefaultSectionSize(44)
+
+        h = self.analysis_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        for col_idx in range(1, 7):
+            h.setSectionResizeMode(col_idx, QHeaderView.ResizeMode.Stretch)
+
+        layout.addWidget(self.analysis_table, 1)
+        return page
+
+    def load_analysis(self):
+        if not hasattr(self, "analysis_table"):
+            return
+
+        with SessionLocal() as session:
+            summary = get_financial_summary(session)
+            monthly_data = get_monthly_financial_comparison(session)
+
+        # Update KPI values
+        self.analysis_kpi_inflow.setText(f"₹{summary['fees_collected']:,.2f}")
+        self.analysis_kpi_outflow.setText(f"₹{summary['expenses_paid']:,.2f}")
+
+        net_cash = summary["net_cash_flow"]
+        self.analysis_kpi_net_cash.setText(f"₹{net_cash:,.2f}")
+        if net_cash >= 0:
+            self.analysis_kpi_net_cash.setStyleSheet("color: #16A34A; font-size: 20px; font-weight: 700;")
+        else:
+            self.analysis_kpi_net_cash.setStyleSheet("color: #DC2626; font-size: 20px; font-weight: 700;")
+
+        self.analysis_kpi_receivables.setText(f"₹{summary['outstanding_student_fees']:,.2f}")
+        self.analysis_kpi_payables.setText(f"₹{summary['outstanding_expenses']:,.2f}")
+
+        net_accrual = summary["net_accrual_income"]
+        self.analysis_kpi_accrual.setText(f"₹{net_accrual:,.2f}")
+        if net_accrual >= 0:
+            self.analysis_kpi_accrual.setStyleSheet("color: #2563EB; font-size: 20px; font-weight: 700;")
+        else:
+            self.analysis_kpi_accrual.setStyleSheet("color: #DC2626; font-size: 20px; font-weight: 700;")
+
+        # Populate Monthly Comparison Table
+        self.analysis_table.setRowCount(len(monthly_data))
+        for row, item in enumerate(monthly_data):
+            month_item = QTableWidgetItem(item["month_name"])
+            month_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.analysis_table.setItem(row, 0, month_item)
+
+            fc_item = QTableWidgetItem(f"₹{item['fees_collected']:,.2f}")
+            fc_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.analysis_table.setItem(row, 1, fc_item)
+
+            ep_item = QTableWidgetItem(f"₹{item['expenses_paid']:,.2f}")
+            ep_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.analysis_table.setItem(row, 2, ep_item)
+
+            ncf = item["net_cash_flow"]
+            ncf_item = QTableWidgetItem(f"₹{ncf:,.2f}")
+            ncf_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if ncf >= 0:
+                ncf_item.setForeground(Qt.GlobalColor.darkGreen)
+            else:
+                ncf_item.setForeground(Qt.GlobalColor.darkRed)
+            self.analysis_table.setItem(row, 3, ncf_item)
+
+            fb_item = QTableWidgetItem(f"₹{item['fees_billed']:,.2f}")
+            fb_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.analysis_table.setItem(row, 4, fb_item)
+
+            ei_item = QTableWidgetItem(f"₹{item['expenses_incurred']:,.2f}")
+            ei_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.analysis_table.setItem(row, 5, ei_item)
+
+            nam = item["net_accrual_margin"]
+            nam_item = QTableWidgetItem(f"₹{nam:,.2f}")
+            nam_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if nam >= 0:
+                nam_item.setForeground(Qt.GlobalColor.blue)
+            else:
+                nam_item.setForeground(Qt.GlobalColor.darkRed)
+            self.analysis_table.setItem(row, 6, nam_item)
+
     def create_students_page(self):
         page = QWidget()
         page.setObjectName("studentsPage")
@@ -1595,6 +3261,45 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(add_student_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         layout.addLayout(header_layout)
+
+        # Search and filter toolbar
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(12)
+
+        self.student_search_input = QLineEdit()
+        self.student_search_input.setPlaceholderText("Search by name, admission no, parent, or phone...")
+        self.student_search_input.setClearButtonEnabled(True)
+        self.student_search_input.setFixedHeight(38)
+        self.student_search_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #E9DEBA;
+                border-radius: 7px;
+                padding: 6px 14px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1.5px solid #012D54;
+            }
+        """)
+        self.student_search_input.textChanged.connect(self.filter_students_table)
+        filter_layout.addWidget(self.student_search_input, 1)
+
+        self.student_count_badge = QLabel("Total: 0 students")
+        self.student_count_badge.setStyleSheet("""
+            QLabel {
+                color: #012D54;
+                font-size: 12px;
+                font-weight: 600;
+                background-color: #E9DEBA;
+                padding: 6px 14px;
+                border-radius: 6px;
+            }
+        """)
+        filter_layout.addWidget(self.student_count_badge, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        layout.addLayout(filter_layout)
 
         # Students table
         self.students_table = QTableWidget()
@@ -1809,9 +3514,52 @@ class MainWindow(QMainWindow):
                     action_widget,
                 )
 
-                
+        if hasattr(self, "filter_students_table"):
+            self.filter_students_table()
 
-                
+    def filter_students_table(self):
+        if not hasattr(self, "student_search_input") or not hasattr(self, "students_table"):
+            return
+
+        query = self.student_search_input.text().strip().lower()
+        total_rows = self.students_table.rowCount()
+        visible_count = 0
+
+        for row in range(total_rows):
+            adm_item = self.students_table.item(row, 0)
+            name_item = self.students_table.item(row, 1)
+            parent_item = self.students_table.item(row, 2)
+            phone_item = self.students_table.item(row, 3)
+
+            adm = adm_item.text().lower() if adm_item else ""
+            name = name_item.text().lower() if name_item else ""
+            parent = parent_item.text().lower() if parent_item else ""
+            phone = phone_item.text().lower() if phone_item else ""
+
+            matches = (
+                not query
+                or (query in adm)
+                or (query in name)
+                or (query in parent)
+                or (query in phone)
+            )
+
+            self.students_table.setRowHidden(row, not matches)
+            if matches:
+                visible_count += 1
+
+        if hasattr(self, "student_count_badge"):
+            if not query:
+                self.student_count_badge.setText(
+                    f"Total: {total_rows} student{'s' if total_rows != 1 else ''}"
+                )
+            elif visible_count == 0:
+                self.student_count_badge.setText(f"0 of {total_rows} match")
+            else:
+                self.student_count_badge.setText(
+                    f"Showing {visible_count} of {total_rows} students"
+                )
+
     def refresh_dashboard(self):
         batch_id = self.batch_selector.currentData()
 
@@ -2226,7 +3974,7 @@ class MainWindow(QMainWindow):
         # Create dialog
         dialog = QDialog(self)
         dialog.setWindowTitle("Student Profile")
-        dialog.resize(600, 550)
+        dialog.resize(780, 600)
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(25, 25, 25, 25)
@@ -2697,6 +4445,8 @@ class MainWindow(QMainWindow):
             return card
 
 
+        overdue_label = QLabel("₹0.00")
+
         fees_summary_layout.addWidget(
             create_fee_summary_card(
                 "Total Due",
@@ -2718,14 +4468,55 @@ class MainWindow(QMainWindow):
             )
         )
 
+        fees_summary_layout.addWidget(
+            create_fee_summary_card(
+                "Overdue",
+                overdue_label,
+            )
+        )
+
         fees_layout.addLayout(fees_summary_layout)
+
+        student_fees_table = QTableWidget()
+        student_fees_table.setColumnCount(7)
+        student_fees_table.setHorizontalHeaderLabels([
+            "Period", "Total Due", "Paid", "Outstanding", "Due Date", "Status", "Actions"
+        ])
+        student_fees_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        student_fees_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        student_fees_table.verticalHeader().setVisible(False)
+        sh = student_fees_table.horizontalHeader()
+        sh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        sh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        sh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        sh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        sh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        sh.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        sh.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        student_fees_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #FEFEFE;
+                border: 1px solid #E9DEBA;
+                border-radius: 8px;
+                font-size: 12px;
+            }
+            QHeaderView::section {
+                background-color: #012D54;
+                color: #FEFEFE;
+                padding: 6px;
+                font-weight: 600;
+            }
+        """)
+        fees_layout.addWidget(student_fees_table, 1)
 
         tabs.addTab(fees_tab, "Fees")
         self.load_student_fee_summary(
             student_id,
             total_due_label,
             total_paid_label,
-            outstanding_label
+            outstanding_label,
+            overdue_label,
+            student_fees_table,
         )
 
 
@@ -2958,12 +4749,15 @@ class MainWindow(QMainWindow):
         total_due_label,
         total_paid_label,
         outstanding_label,
+        overdue_label=None,
+        table=None,
     ):
         with SessionLocal() as session:
             summary = get_student_fee_summary(
                 session,
                 student_id=student_id,
             )
+            fees = get_student_fees(session, student_id=student_id)
 
         total_due_label.setText(
             f"₹{summary['total_due']:,.2f}"
@@ -2976,6 +4770,99 @@ class MainWindow(QMainWindow):
         outstanding_label.setText(
             f"₹{summary['outstanding']:,.2f}"
         )
+
+        if overdue_label is not None:
+            overdue_label.setText(
+                f"₹{summary.get('overdue', 0.0):,.2f}"
+            )
+
+        if table is not None:
+            table.setRowCount(len(fees))
+            for row, fee in enumerate(fees):
+                m_name = MONTH_NAMES[fee.fee_month - 1] if (1 <= fee.fee_month <= 12) else str(fee.fee_month)
+                period_item = QTableWidgetItem(f"{m_name} {fee.academic_year}")
+                period_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(row, 0, period_item)
+
+                due_item = QTableWidgetItem(f"₹{fee.final_amount_due:,.2f}")
+                due_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(row, 1, due_item)
+
+                paid_item = QTableWidgetItem(f"₹{fee.total_paid:,.2f}")
+                paid_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(row, 2, paid_item)
+
+                bal_val = fee.outstanding_balance
+                bal_item = QTableWidgetItem(f"₹{bal_val:,.2f}")
+                bal_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if bal_val > 0:
+                    bal_item.setForeground(Qt.GlobalColor.darkRed)
+                table.setItem(row, 3, bal_item)
+
+                due_date_str = fee.due_date.strftime("%d/%m/%Y") if fee.due_date else "—"
+                d_item = QTableWidgetItem(due_date_str)
+                d_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(row, 4, d_item)
+
+                status_calc = fee.calculate_status()
+                status_item = QTableWidgetItem(status_calc.replace("_", " ").title())
+                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if status_calc == "PAID":
+                    status_item.setForeground(Qt.GlobalColor.darkGreen)
+                elif status_calc == "OVERDUE":
+                    status_item.setForeground(Qt.GlobalColor.red)
+                table.setItem(row, 5, status_item)
+
+                act_w = QWidget()
+                act_l = QHBoxLayout(act_w)
+                act_l.setContentsMargins(4, 2, 4, 2)
+                act_l.setSpacing(6)
+                act_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                pay_b = QPushButton("Pay")
+                pay_b.setFixedSize(50, 26)
+                pay_b.setEnabled(bal_val > 0)
+                pay_b.setCursor(Qt.CursorShape.PointingHandCursor)
+                pay_b.setStyleSheet("""
+                    QPushButton {
+                        background-color: #012D54;
+                        color: #FEFEFE;
+                        border: none;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover:enabled {
+                        background-color: #04294D;
+                    }
+                    QPushButton:disabled {
+                        background-color: #E5E7EB;
+                        color: #9CA3AF;
+                    }
+                """)
+                pay_b.clicked.connect(lambda ch, fid=fee.id: (self.open_record_payment_dialog(fid), self.load_student_fee_summary(student_id, total_due_label, total_paid_label, outstanding_label, overdue_label, table)))
+                act_l.addWidget(pay_b)
+
+                hist_b = QPushButton("History")
+                hist_b.setFixedSize(58, 26)
+                hist_b.setCursor(Qt.CursorShape.PointingHandCursor)
+                hist_b.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E9DEBA;
+                        color: #012D54;
+                        border: 1px solid #D9B85F;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover {
+                        background-color: #D9B85F;
+                    }
+                """)
+                hist_b.clicked.connect(lambda ch, fid=fee.id: (self.open_payment_history_dialog(fid), self.load_student_fee_summary(student_id, total_due_label, total_paid_label, outstanding_label, overdue_label, table)))
+                act_l.addWidget(hist_b)
+
+                table.setCellWidget(row, 6, act_w)
     def create_attendance_page(self):
         page = QWidget()
         page.setObjectName("attendancePage")
@@ -3044,6 +4931,58 @@ class MainWindow(QMainWindow):
         date_layout.addWidget(date_label, alignment=Qt.AlignmentFlag.AlignVCenter)
         date_layout.addWidget(date_picker, alignment=Qt.AlignmentFlag.AlignVCenter)
         date_layout.addStretch()
+
+        mark_all_present_btn = QPushButton("✓ Mark All Present")
+        mark_all_present_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        mark_all_present_btn.setFixedHeight(34)
+        mark_all_present_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E9DEBA;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QPushButton:hover:enabled {
+                background-color: #D9B85F;
+            }
+            QPushButton:disabled {
+                background-color: #F1EBD3;
+                color: #8B887A;
+                border-color: #E9DEBA;
+            }
+        """)
+        mark_all_present_btn.clicked.connect(lambda: self.set_all_attendance("PRESENT"))
+        self.mark_all_present_btn = mark_all_present_btn
+        date_layout.addWidget(mark_all_present_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        clear_all_btn = QPushButton("Clear All")
+        clear_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        clear_all_btn.setFixedHeight(34)
+        clear_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FEFEFE;
+                color: #012D54;
+                border: 1px solid #E9DEBA;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover:enabled {
+                background-color: #F1EBD3;
+            }
+            QPushButton:disabled {
+                background-color: #F9F9F9;
+                color: #BDBDBD;
+                border-color: #E5E7EB;
+            }
+        """)
+        clear_all_btn.clicked.connect(lambda: self.set_all_attendance(None))
+        self.clear_all_attendance_btn = clear_all_btn
+        date_layout.addWidget(clear_all_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         layout.addLayout(date_layout)
 
@@ -3248,6 +5187,10 @@ class MainWindow(QMainWindow):
             ):
                 self.attendance_table.setRowCount(0)
                 self.attendance_status = {}
+                self.attendance_row_callbacks = {}
+                if hasattr(self, "mark_all_present_btn"):
+                    self.mark_all_present_btn.setEnabled(False)
+                    self.clear_all_attendance_btn.setEnabled(False)
 
                 self.attendance_summary.setText(
                     "Attendance unavailable — "
@@ -3264,6 +5207,7 @@ class MainWindow(QMainWindow):
         }
 
         self.attendance_status = {}
+        self.attendance_row_callbacks = {}
 
         for row, student in enumerate(students):
             self.attendance_table.insertRow(row)
@@ -3407,6 +5351,8 @@ class MainWindow(QMainWindow):
                         update_buttons("PRESENT")
                     )
             )
+            self.attendance_row_callbacks[student.id] = update_attendance_buttons
+
             if self.attendance_status[student.id] is not None:
                 update_attendance_buttons(
                     self.attendance_status[student.id]
@@ -3441,6 +5387,12 @@ class MainWindow(QMainWindow):
                 3,
                 present_widget
             )
+
+        has_students = len(students) > 0
+        if hasattr(self, "mark_all_present_btn"):
+            self.mark_all_present_btn.setEnabled(has_students)
+            self.clear_all_attendance_btn.setEnabled(has_students)
+
         present_count = sum(
             1
             for status in self.attendance_status.values()
@@ -3460,6 +5412,15 @@ class MainWindow(QMainWindow):
             f"Absent: {absent_count}  |  "
             f"Total: {total_count}"
         )
+
+    def set_all_attendance(self, status):
+        if not hasattr(self, "attendance_row_callbacks") or not self.attendance_row_callbacks:
+            return
+
+        for student_id, update_callback in self.attendance_row_callbacks.items():
+            self.attendance_status[student_id] = status
+            update_callback(status)
+
     def save_attendance(self):
         batch_id = self.batch_selector.currentData()
 

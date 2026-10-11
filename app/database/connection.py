@@ -4,9 +4,23 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 
-# Keep application data separate from source code.
-DATA_DIR = Path.home() / ".local" / "share" / "TAMS"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+import os
+import sys
+
+# Keep application data separate from source code, cross-platform.
+def _resolve_data_dir() -> Path:
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA")
+        target = Path(base) / "TAMS" if base else Path.home() / "AppData" / "Roaming" / "TAMS"
+    elif sys.platform == "darwin":
+        target = Path.home() / "Library" / "Application Support" / "TAMS"
+    else:
+        xdg = os.environ.get("XDG_DATA_HOME")
+        target = Path(xdg) / "TAMS" if xdg else Path.home() / ".local" / "share" / "TAMS"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+DATA_DIR = _resolve_data_dir()
 
 DATABASE_PATH = DATA_DIR / "tams.db"
 

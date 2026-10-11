@@ -352,8 +352,8 @@ class MainWindow(QMainWindow):
             self.coaching_helper.stop()
         super().closeEvent(event)
 
-    def open_settings(self):
-        dialog = SettingsDialog(self)
+    def open_settings(self, initial_tab: int = 0):
+        dialog = SettingsDialog(self, initial_tab=initial_tab)
         dialog.exec()
         self.load_batches()
         
@@ -574,6 +574,150 @@ class MainWindow(QMainWindow):
                 background: {NAVY};
                 border: none;
             }}
+
+            /* ── Global Inputs & Focus Rings ── */
+            QLineEdit, QTextEdit, QSpinBox, QTimeEdit, QDateEdit {{
+                background: {WHITE};
+                color: {TEXT};
+                border: 1px solid {GOLD};
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 13px;
+            }}
+
+            QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QTimeEdit:focus, QDateEdit:focus {{
+                border: 2px solid {NAVY};
+            }}
+
+            QLineEdit:disabled, QTextEdit:disabled, QSpinBox:disabled, QTimeEdit:disabled, QDateEdit:disabled {{
+                background: {CREAM};
+                color: {MUTED};
+                border: 1px solid {LIGHT_GOLD};
+            }}
+
+            /* ── CheckBoxes & RadioButtons ── */
+            QCheckBox, QRadioButton {{
+                spacing: 8px;
+                font-size: 13px;
+                color: {TEXT};
+            }}
+
+            QCheckBox::indicator {{
+                width: 17px;
+                height: 17px;
+                border: 1px solid {GOLD};
+                border-radius: 4px;
+                background: {WHITE};
+            }}
+
+            QCheckBox::indicator:hover {{
+                border: 1px solid {NAVY};
+                background: {CREAM};
+            }}
+
+            QCheckBox::indicator:checked {{
+                background: {NAVY};
+                border: 1px solid {NAVY};
+            }}
+
+            QCheckBox::indicator:disabled {{
+                border: 1px solid {LIGHT_GOLD};
+                background: {CREAM};
+            }}
+
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 1px solid {GOLD};
+                border-radius: 9px;
+                background: {WHITE};
+            }}
+
+            QRadioButton::indicator:hover {{
+                border: 1px solid {NAVY};
+                background: {CREAM};
+            }}
+
+            QRadioButton::indicator:checked {{
+                background: {NAVY};
+                border: 3px solid {WHITE};
+            }}
+
+            /* ── Menus & ToolTips ── */
+            QMenu {{
+                background-color: {WHITE};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 8px;
+                padding: 6px;
+                color: {TEXT};
+            }}
+
+            QMenu::item {{
+                padding: 6px 20px 6px 14px;
+                border-radius: 5px;
+                font-size: 13px;
+            }}
+
+            QMenu::item:selected {{
+                background-color: {LIGHT_GOLD};
+                color: {NAVY};
+                font-weight: 600;
+            }}
+
+            QMenu::separator {{
+                height: 1px;
+                background: {LIGHT_GOLD};
+                margin: 4px 6px;
+            }}
+
+            QToolTip {{
+                background-color: {NAVY};
+                color: {WHITE};
+                border: 1px solid {GOLD};
+                border-radius: 5px;
+                padding: 5px 8px;
+                font-size: 12px;
+            }}
+
+            /* ── GroupBox, ProgressBar & Splitter ── */
+            QGroupBox {{
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 8px;
+                margin-top: 16px;
+                padding-top: 14px;
+                background: {WHITE};
+                font-weight: 700;
+                color: {NAVY};
+            }}
+
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 6px;
+                color: {NAVY};
+            }}
+
+            QProgressBar {{
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 6px;
+                background: {CREAM};
+                text-align: center;
+                color: {NAVY};
+                font-weight: 600;
+                font-size: 11px;
+                min-height: 16px;
+            }}
+
+            QProgressBar::chunk {{
+                background: {GOLD};
+                border-radius: 5px;
+            }}
+
+            QSplitter::handle {{
+                background: {LIGHT_GOLD};
+            }}
+
 
             /* ── Dashboard Page ── */
             #dashboardPage {{

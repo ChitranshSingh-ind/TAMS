@@ -39,7 +39,8 @@ CREDENTIALS_FILE = DATA_DIR / ".whatsapp_credentials"
 
 def _obfuscate(text: str) -> str:
     """Lightweight host/user-bound obfuscation for local credential persistence."""
-    salt = f"TAMS_{os.getenv('USER', 'tams')}_{socket.gethostname()}"
+    user = os.getenv("USERNAME", os.getenv("USER", "tams"))
+    salt = f"TAMS_{user}_{socket.gethostname()}"
     salt_bytes = salt.encode("utf-8")
     text_bytes = text.encode("utf-8")
     masked = bytes([b ^ salt_bytes[i % len(salt_bytes)] for i, b in enumerate(text_bytes)])
@@ -48,7 +49,8 @@ def _obfuscate(text: str) -> str:
 
 def _deobfuscate(encoded: str) -> str:
     try:
-        salt = f"TAMS_{os.getenv('USER', 'tams')}_{socket.gethostname()}"
+        user = os.getenv("USERNAME", os.getenv("USER", "tams"))
+        salt = f"TAMS_{user}_{socket.gethostname()}"
         salt_bytes = salt.encode("utf-8")
         raw = base64.b64decode(encoded.encode("ascii"))
         original = bytes([b ^ salt_bytes[i % len(salt_bytes)] for i, b in enumerate(raw)])

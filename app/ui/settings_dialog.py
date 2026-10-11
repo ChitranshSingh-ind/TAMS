@@ -1,30 +1,54 @@
-from PyQt6.QtCore import Qt
-from datetime import time
-from PyQt6.QtCore import QTime
+import json
+import logging
+from datetime import datetime, time, timezone
+from pathlib import Path
+from PyQt6.QtCore import Qt, QTime, QUrl
+from PyQt6.QtGui import QColor, QDesktopServices
 
 from PyQt6.QtWidgets import (
     QAbstractSpinBox,
+    QCheckBox,
+    QComboBox,
     QDialog,
+    QFileDialog,
+    QFormLayout,
     QFrame,
+    QGridLayout,
+    QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
+    QSpinBox,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
     QTimeEdit,
     QVBoxLayout,
     QWidget,
-    QLineEdit,
-    QCheckBox,
-    QSizePolicy,
-    QLineEdit,
-
 )
+from sqlalchemy import select
+from app.database.connection import DATABASE_PATH, DATA_DIR, SessionLocal
 from app.database.models.batch import Batch
-from app.database.connection import SessionLocal
+from app.database.models.message import (
+    Message,
+    MessageTemplate,
+    MessagingConfig,
+    NotificationRule,
+)
+from app.services.backup_service import (
+    create_database_backup,
+    get_backup_directory,
+    list_backups,
+    restore_database_backup,
+)
 from app.services.batch_service import (
     create_batch,
     get_active_batches,
@@ -33,7 +57,27 @@ from app.services.batch_service import (
     reactivate_batch,
     get_batch,
 )
-from app.ui.messaging_settings_widget import MessagingSettingsWidget
+from app.services.coaching_helper_service import (
+    check_for_updates,
+    get_helper_status_file_path,
+)
+from app.services.messaging_service import (
+    ensure_messaging_seed_data,
+    get_messaging_config,
+    get_whatsapp_provider_client,
+    update_messaging_config,
+)
+from app.services.whatsapp_provider import (
+    DEFAULT_GRAPH_API_VERSION,
+    WhatsAppCloudProvider,
+    get_access_token,
+    mask_token,
+    remove_access_token,
+    save_access_token,
+)
+from app.ui.messaging_settings_widget import MessagingSettingsWidget, SendTestMessageDialog
+from app.ui.table_utils import configure_table_ux
+
 
 
 NAVY = "#012D54"
@@ -162,7 +206,8 @@ class SettingsDialog(QDialog):
             ("⚙", "General"),
             ("▣", "Batches"),
             ("◈", "WhatsApp"),
-            ("◫", "Backup")
+            ("⚡", "Automation"),
+            ("◫", "Backup"),
         ]
 
         for icon, name in items:
@@ -183,13 +228,9 @@ class SettingsDialog(QDialog):
 
         self.pages.addWidget(self.create_general_page())
         self.pages.addWidget(self.create_batches_page())
-        self.messaging_settings_page = MessagingSettingsWidget()
-        self.pages.addWidget(self.messaging_settings_page)
-        self.pages.addWidget(self.create_placeholder_page(
-            "Backup & Maintenance",
-            "Backup and application maintenance settings."
-        ))
-        
+        self.pages.addWidget(self.create_whatsapp_page())
+        self.pages.addWidget(self.create_automation_page())
+        self.pages.addWidget(self.create_backup_page())
 
         body_layout.addWidget(self.pages)
 
@@ -199,6 +240,9 @@ class SettingsDialog(QDialog):
 
         main_layout.addWidget(body)
         self.load_batches()
+        self.load_whatsapp_settings()
+        self.load_automation_settings()
+        self.load_backup_page()
 
     def create_general_page(self):
         page = QWidget()
@@ -364,23 +408,754 @@ class SettingsDialog(QDialog):
 
         return page
     
-    def create_placeholder_page(self, title_text, description_text):
+    # ── TAB 2: WHATSAPP CLOUD API CONFIGURATION ─────────────────────────────
+    def create_whatsapp_page(self):
         page = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; } QScrollArea > QWidget > QWidget { background: transparent; }")
 
-        layout = QVBoxLayout(page)
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(35, 30, 35, 30)
+        layout.setSpacing(16)
 
-        title = QLabel(title_text)
+        title = QLabel("WhatsApp Cloud API")
         title.setObjectName("pageTitle")
-
-        description = QLabel(description_text)
+        description = QLabel("Configure Meta Cloud API credentials, test connections, and manage access tokens.")
         description.setObjectName("pageDescription")
-
         layout.addWidget(title)
         layout.addWidget(description)
+
+        # 1. Environment Card
+        env_card = QFrame()
+        env_card.setObjectName("settingsCard")
+        env_card_layout = QVBoxLayout(env_card)
+        env_card_layout.setContentsMargins(20, 18, 20, 18)
+        env_card_layout.setSpacing(10)
+
+        env_header = QHBoxLayout()
+        env_title = QLabel("Operating Environment & Mode")
+        env_title.setObjectName("cardTitle")
+        env_header.addWidget(env_title)
+        env_header.addStretch()
+
+        self.wa_env_badge = QLabel("DEVELOPMENT")
+        self.wa_env_badge.setStyleSheet(
+            "background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+        )
+        env_header.addWidget(self.wa_env_badge)
+        env_card_layout.addLayout(env_header)
+
+        env_row = QHBoxLayout()
+        env_row.addWidget(QLabel("Current Mode:"))
+        self.wa_env_combo = QComboBox()
+        self.wa_env_combo.addItem("Development (Meta Test Sender Number)", "DEVELOPMENT")
+        self.wa_env_combo.addItem("Production (Sir's Verified WhatsApp Number)", "PRODUCTION")
+        self.wa_env_combo.currentIndexChanged.connect(self._on_whatsapp_env_changed)
+        env_row.addWidget(self.wa_env_combo, 1)
+        env_card_layout.addLayout(env_row)
+
+        env_hint = QLabel("💡 In Development Mode, messages can only be delivered to phone numbers registered under 'To' in Meta WhatsApp dashboard.")
+        env_hint.setWordWrap(True)
+        env_hint.setObjectName("cardText")
+        env_card_layout.addWidget(env_hint)
+        layout.addWidget(env_card)
+
+        # 2. Meta API Credentials Card
+        cred_card = QFrame()
+        cred_card.setObjectName("settingsCard")
+        cred_layout = QVBoxLayout(cred_card)
+        cred_layout.setContentsMargins(20, 18, 20, 18)
+        cred_layout.setSpacing(12)
+
+        cred_title = QLabel("Meta WhatsApp Cloud API Credentials")
+        cred_title.setObjectName("cardTitle")
+        cred_layout.addWidget(cred_title)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+        self.wa_phone_id_input = QLineEdit()
+        self.wa_phone_id_input.setPlaceholderText("e.g. 104829104810294")
+        form.addRow("Phone Number ID:", self.wa_phone_id_input)
+
+        self.wa_waba_id_input = QLineEdit()
+        self.wa_waba_id_input.setPlaceholderText("e.g. 192840192840192 (WABA ID)")
+        form.addRow("Business Account ID (WABA):", self.wa_waba_id_input)
+
+        self.wa_api_version_input = QLineEdit(DEFAULT_GRAPH_API_VERSION)
+        form.addRow("Graph API Version:", self.wa_api_version_input)
+        cred_layout.addLayout(form)
+        layout.addWidget(cred_card)
+
+        # 3. Security & Access Token Card
+        token_card = QFrame()
+        token_card.setObjectName("settingsCard")
+        tok_layout = QVBoxLayout(token_card)
+        tok_layout.setContentsMargins(20, 18, 20, 18)
+        tok_layout.setSpacing(10)
+
+        tok_title = QLabel("Security & Access Token")
+        tok_title.setObjectName("cardTitle")
+        tok_layout.addWidget(tok_title)
+
+        tok_row = QHBoxLayout()
+        tok_row.addWidget(QLabel("Stored Token:"))
+        self.wa_token_display_lbl = QLabel("Not Configured")
+        self.wa_token_display_lbl.setStyleSheet("font-family: monospace; font-size: 13px; color: #15803D; font-weight: 600;")
+        tok_row.addWidget(self.wa_token_display_lbl, 1)
+
+        self.wa_replace_token_btn = QPushButton("Replace Token")
+        self.wa_replace_token_btn.clicked.connect(self._on_wa_replace_token)
+        tok_row.addWidget(self.wa_replace_token_btn)
+
+        self.wa_remove_token_btn = QPushButton("Remove")
+        self.wa_remove_token_btn.setObjectName("dangerButton")
+        self.wa_remove_token_btn.clicked.connect(self._on_wa_remove_token)
+        tok_row.addWidget(self.wa_remove_token_btn)
+        tok_layout.addLayout(tok_row)
+
+        self.wa_new_token_input = QLineEdit()
+        self.wa_new_token_input.setPlaceholderText("Paste Meta System User Access Token here (EAAB...)")
+        self.wa_new_token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.wa_new_token_input.setVisible(False)
+        tok_layout.addWidget(self.wa_new_token_input)
+
+        tok_hint = QLabel("🔒 Tokens are securely persisted in local OS storage with restricted permissions (0600) and never exported.")
+        tok_hint.setObjectName("cardText")
+        tok_layout.addWidget(tok_hint)
+        layout.addWidget(token_card)
+
+        # 4. Action Buttons
+        btn_bar = QHBoxLayout()
+        btn_bar.setSpacing(10)
+
+        self.wa_test_conn_btn = QPushButton("🔌 Test Connection")
+        self.wa_test_conn_btn.clicked.connect(self._on_wa_test_connection)
+        btn_bar.addWidget(self.wa_test_conn_btn)
+
+        self.wa_send_test_btn = QPushButton("📲 Send Test Message")
+        self.wa_send_test_btn.clicked.connect(self._on_wa_send_test_message)
+        btn_bar.addWidget(self.wa_send_test_btn)
+
+        btn_bar.addStretch()
+
+        self.wa_cancel_btn = QPushButton("Revert")
+        self.wa_cancel_btn.clicked.connect(self.load_whatsapp_settings)
+        btn_bar.addWidget(self.wa_cancel_btn)
+
+        self.wa_save_btn = QPushButton("Save WhatsApp Settings")
+        self.wa_save_btn.setObjectName("primaryButton")
+        self.wa_save_btn.clicked.connect(self._on_save_whatsapp_settings)
+        btn_bar.addWidget(self.wa_save_btn)
+
+        layout.addLayout(btn_bar)
         layout.addStretch()
 
+        scroll.setWidget(container)
+        outer_layout = QVBoxLayout(page)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(scroll)
         return page
+
+    def load_whatsapp_settings(self):
+        with SessionLocal() as session:
+            ensure_messaging_seed_data(session)
+            cfg = get_messaging_config(session)
+
+            env = cfg.get("whatsapp_environment", "DEVELOPMENT")
+            idx = self.wa_env_combo.findData(env)
+            if idx >= 0:
+                self.wa_env_combo.setCurrentIndex(idx)
+            self._on_whatsapp_env_changed()
+
+            self.wa_phone_id_input.setText(cfg.get("whatsapp_phone_number_id", ""))
+            self.wa_waba_id_input.setText(cfg.get("whatsapp_waba_id", ""))
+            self.wa_api_version_input.setText(cfg.get("whatsapp_api_version", DEFAULT_GRAPH_API_VERSION))
+
+            tok = get_access_token()
+            self.wa_token_display_lbl.setText(mask_token(tok))
+            self.wa_new_token_input.clear()
+            self.wa_new_token_input.setVisible(False)
+
+    def _on_whatsapp_env_changed(self):
+        env = self.wa_env_combo.currentData()
+        if env == "PRODUCTION":
+            self.wa_env_badge.setText("PRODUCTION (LIVE NUMBER)")
+            self.wa_env_badge.setStyleSheet(
+                "background-color: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+            )
+        else:
+            self.wa_env_badge.setText("DEVELOPMENT (META TEST SENDER)")
+            self.wa_env_badge.setStyleSheet(
+                "background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+            )
+
+    def _on_wa_replace_token(self):
+        self.wa_new_token_input.setVisible(True)
+        self.wa_new_token_input.setFocus()
+
+    def _on_wa_remove_token(self):
+        res = QMessageBox.question(
+            self,
+            "Remove Access Token",
+            "Are you sure you want to remove the stored Meta access token?\n"
+            "WhatsApp messaging will be disabled until a new token is entered.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if res == QMessageBox.StandardButton.Yes:
+            remove_access_token()
+            self.wa_token_display_lbl.setText("Not Configured")
+            self.wa_new_token_input.clear()
+            self.wa_new_token_input.setVisible(False)
+            QMessageBox.information(self, "Token Removed", "WhatsApp access token has been removed.")
+
+    def _on_wa_test_connection(self):
+        with SessionLocal() as session:
+            provider = get_whatsapp_provider_client(session)
+            new_tok = self.wa_new_token_input.text().strip()
+            if new_tok:
+                provider.config.access_token = new_tok
+            if self.wa_phone_id_input.text().strip():
+                provider.config.phone_number_id = self.wa_phone_id_input.text().strip()
+            if self.wa_api_version_input.text().strip():
+                provider.config.api_version = self.wa_api_version_input.text().strip()
+            provider.config.environment = self.wa_env_combo.currentData()
+
+            res = provider.test_connection()
+
+        if res.get("success"):
+            QMessageBox.information(
+                self,
+                "Connection Successful",
+                f"✅ Meta WhatsApp Cloud API Connection Successful!\n\n"
+                f"Verified Name: {res.get('verified_name')}\n"
+                f"Display Phone: {res.get('display_phone_number')}\n"
+                f"Quality Rating: {res.get('quality_rating')}\n"
+                f"Environment: {res.get('environment')}",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Connection Failed",
+                f"❌ Meta WhatsApp Cloud API Test Failed:\n\n{res.get('error')}",
+            )
+
+    def _on_wa_send_test_message(self):
+        dlg = SendTestMessageDialog(self)
+        dlg.exec()
+
+    def _on_save_whatsapp_settings(self):
+        new_tok = self.wa_new_token_input.text().strip()
+        if new_tok:
+            save_access_token(new_tok)
+            self.wa_token_display_lbl.setText(mask_token(new_tok))
+            self.wa_new_token_input.clear()
+            self.wa_new_token_input.setVisible(False)
+
+        new_configs = {
+            "whatsapp_environment": self.wa_env_combo.currentData(),
+            "whatsapp_phone_number_id": self.wa_phone_id_input.text().strip(),
+            "whatsapp_waba_id": self.wa_waba_id_input.text().strip(),
+            "whatsapp_api_version": self.wa_api_version_input.text().strip() or DEFAULT_GRAPH_API_VERSION,
+        }
+
+        with SessionLocal() as session:
+            update_messaging_config(session, new_configs)
+
+        QMessageBox.information(self, "Saved", "WhatsApp settings saved successfully!")
+        self.load_whatsapp_settings()
+
+    # ── TAB 3: AUTOMATION & QUEUE SETTINGS ─────────────────────────────────────
+    def create_automation_page(self):
+        page = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; } QScrollArea > QWidget > QWidget { background: transparent; }")
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(35, 30, 35, 30)
+        layout.setSpacing(16)
+
+        title = QLabel("Automation & Queue Policies")
+        title.setObjectName("pageTitle")
+        description = QLabel("Configure background queue processing, retry backoff, quiet hours, and event-based notification rules.")
+        description.setObjectName("pageDescription")
+        layout.addWidget(title)
+        layout.addWidget(description)
+
+        # 1. Queue & Retry Card
+        q_card = QFrame()
+        q_card.setObjectName("settingsCard")
+        q_layout = QVBoxLayout(q_card)
+        q_layout.setContentsMargins(20, 18, 20, 18)
+        q_layout.setSpacing(12)
+
+        q_title = QLabel("Background Queue & Retry Policies")
+        q_title.setObjectName("cardTitle")
+        q_layout.addWidget(q_title)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+
+        self.auto_queue_enabled_cb = QCheckBox("Enable background message queue processing")
+        form.addRow("Queue Active:", self.auto_queue_enabled_cb)
+
+        self.auto_retry_limit_spin = QSpinBox()
+        self.auto_retry_limit_spin.setRange(1, 10)
+        self.auto_retry_limit_spin.setValue(3)
+        form.addRow("Max Retry Attempts:", self.auto_retry_limit_spin)
+
+        self.auto_backoff_base_spin = QSpinBox()
+        self.auto_backoff_base_spin.setRange(10, 600)
+        self.auto_backoff_base_spin.setValue(60)
+        self.auto_backoff_base_spin.setSuffix(" seconds")
+        form.addRow("Exponential Backoff Base:", self.auto_backoff_base_spin)
+
+        self.auto_polling_interval_spin = QSpinBox()
+        self.auto_polling_interval_spin.setRange(5, 120)
+        self.auto_polling_interval_spin.setValue(15)
+        self.auto_polling_interval_spin.setSuffix(" seconds")
+        form.addRow("Companion Polling Interval:", self.auto_polling_interval_spin)
+
+        self.auto_max_bulk_spin = QSpinBox()
+        self.auto_max_bulk_spin.setRange(10, 500)
+        self.auto_max_bulk_spin.setValue(100)
+        form.addRow("Max Bulk Batch Size:", self.auto_max_bulk_spin)
+        q_layout.addLayout(form)
+        layout.addWidget(q_card)
+
+        # 2. Quiet Hours Card
+        qh_card = QFrame()
+        qh_card.setObjectName("settingsCard")
+        qh_layout = QVBoxLayout(qh_card)
+        qh_layout.setContentsMargins(20, 18, 20, 18)
+        qh_layout.setSpacing(10)
+
+        qh_title = QLabel("Quiet Hours (Nighttime Safety)")
+        qh_title.setObjectName("cardTitle")
+        qh_layout.addWidget(qh_title)
+
+        qh_form = QFormLayout()
+        qh_form.setSpacing(10)
+        self.auto_quiet_hours_cb = QCheckBox("Pause message dispatching during quiet hours")
+        qh_form.addRow("Quiet Hours Active:", self.auto_quiet_hours_cb)
+
+        self.auto_quiet_start_edit = QTimeEdit(QTime(22, 0))
+        qh_form.addRow("Start Time:", self.auto_quiet_start_edit)
+
+        self.auto_quiet_end_edit = QTimeEdit(QTime(7, 0))
+        qh_form.addRow("End Time:", self.auto_quiet_end_edit)
+        qh_layout.addLayout(qh_form)
+
+        qh_hint = QLabel("🌙 Outgoing messages queued during quiet hours will hold in the queue and automatically dispatch once quiet hours conclude.")
+        qh_hint.setWordWrap(True)
+        qh_hint.setObjectName("cardText")
+        qh_layout.addWidget(qh_hint)
+        layout.addWidget(qh_card)
+
+        # 3. Notification Rules Card
+        rules_card = QFrame()
+        rules_card.setObjectName("settingsCard")
+        r_layout = QVBoxLayout(rules_card)
+        r_layout.setContentsMargins(20, 18, 20, 18)
+        r_layout.setSpacing(10)
+
+        r_title = QLabel("Event Notification Rules")
+        r_title.setObjectName("cardTitle")
+        r_layout.addWidget(r_title)
+
+        r_hint = QLabel("Enable or disable automatic trigger notifications for attendance, fees, and test results.")
+        r_hint.setObjectName("cardText")
+        r_layout.addWidget(r_hint)
+
+        self.auto_rules_table = QTableWidget()
+        self.auto_rules_table.setColumnCount(5)
+        self.auto_rules_table.setHorizontalHeaderLabels([
+            "Rule Name", "Trigger Event", "Cooldown", "Enabled", "Template"
+        ])
+        configure_table_ux(
+            self.auto_rules_table,
+            column_widths=[220, 140, 100, 80, 180],
+            stretch_column=0,
+            default_row_height=38,
+        )
+        self.auto_rules_table.setMinimumHeight(180)
+        r_layout.addWidget(self.auto_rules_table)
+        layout.addWidget(rules_card)
+
+        # Action Buttons
+        btn_bar = QHBoxLayout()
+        btn_bar.addStretch()
+
+        self.auto_cancel_btn = QPushButton("Revert")
+        self.auto_cancel_btn.clicked.connect(self.load_automation_settings)
+        btn_bar.addWidget(self.auto_cancel_btn)
+
+        self.auto_save_btn = QPushButton("Save Automation Settings")
+        self.auto_save_btn.setObjectName("primaryButton")
+        self.auto_save_btn.clicked.connect(self._on_save_automation_settings)
+        btn_bar.addWidget(self.auto_save_btn)
+
+        layout.addLayout(btn_bar)
+        layout.addStretch()
+
+        scroll.setWidget(container)
+        outer_layout = QVBoxLayout(page)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(scroll)
+        return page
+
+    def load_automation_settings(self):
+        with SessionLocal() as session:
+            ensure_messaging_seed_data(session)
+            cfg = get_messaging_config(session)
+
+            self.auto_queue_enabled_cb.setChecked(cfg.get("queue_enabled", "true").lower() == "true")
+            self.auto_retry_limit_spin.setValue(int(cfg.get("retry_limit", "3")))
+            self.auto_backoff_base_spin.setValue(int(cfg.get("retry_backoff_base", "60")))
+            self.auto_polling_interval_spin.setValue(int(cfg.get("helper_polling_interval", "15")))
+            self.auto_max_bulk_spin.setValue(int(cfg.get("max_bulk_batch_size", "100")))
+
+            self.auto_quiet_hours_cb.setChecked(cfg.get("quiet_hours_enabled", "false").lower() == "true")
+            st_parts = [int(p) for p in cfg.get("quiet_hours_start", "22:00").split(":")]
+            end_parts = [int(p) for p in cfg.get("quiet_hours_end", "07:00").split(":")]
+            self.auto_quiet_start_edit.setTime(QTime(st_parts[0], st_parts[1]))
+            self.auto_quiet_end_edit.setTime(QTime(end_parts[0], end_parts[1]))
+
+            # Load notification rules
+            rules = session.scalars(select(NotificationRule).order_by(NotificationRule.name.asc())).all()
+            tmpls = {t.id: t.name for t in session.scalars(select(MessageTemplate)).all()}
+            self.auto_rules_table.setRowCount(len(rules))
+            for row, r in enumerate(rules):
+                name_item = QTableWidgetItem(r.name)
+                name_item.setData(Qt.ItemDataRole.UserRole, r.id)
+                self.auto_rules_table.setItem(row, 0, name_item)
+                self.auto_rules_table.setItem(row, 1, QTableWidgetItem(r.trigger_event))
+                self.auto_rules_table.setItem(row, 2, QTableWidgetItem(f"{r.cooldown_days} days"))
+
+                cb = QCheckBox()
+                cb.setChecked(bool(r.is_enabled))
+                cb_container = QWidget()
+                cb_layout = QHBoxLayout(cb_container)
+                cb_layout.setContentsMargins(0, 0, 0, 0)
+                cb_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                cb_layout.addWidget(cb)
+                self.auto_rules_table.setCellWidget(row, 3, cb_container)
+
+                tmpl_name = tmpls.get(r.template_id, "—")
+                self.auto_rules_table.setItem(row, 4, QTableWidgetItem(tmpl_name))
+
+    def _on_save_automation_settings(self):
+        new_configs = {
+            "queue_enabled": "true" if self.auto_queue_enabled_cb.isChecked() else "false",
+            "retry_limit": str(self.auto_retry_limit_spin.value()),
+            "retry_backoff_base": str(self.auto_backoff_base_spin.value()),
+            "helper_polling_interval": str(self.auto_polling_interval_spin.value()),
+            "max_bulk_batch_size": str(self.auto_max_bulk_spin.value()),
+            "quiet_hours_enabled": "true" if self.auto_quiet_hours_cb.isChecked() else "false",
+            "quiet_hours_start": self.auto_quiet_start_edit.time().toString("HH:mm"),
+            "quiet_hours_end": self.auto_quiet_end_edit.time().toString("HH:mm"),
+        }
+
+        with SessionLocal() as session:
+            update_messaging_config(session, new_configs)
+
+            for row in range(self.auto_rules_table.rowCount()):
+                item = self.auto_rules_table.item(row, 0)
+                if item:
+                    rule_id = item.data(Qt.ItemDataRole.UserRole)
+                    cb_container = self.auto_rules_table.cellWidget(row, 3)
+                    cb = cb_container.findChild(QCheckBox) if cb_container else None
+                    if rule_id and cb:
+                        r = session.get(NotificationRule, rule_id)
+                        if r:
+                            r.is_enabled = cb.isChecked()
+            session.commit()
+
+        QMessageBox.information(self, "Saved", "Automation settings saved successfully!")
+        self.load_automation_settings()
+
+    # ── TAB 4: BACKUP & SYSTEM MAINTENANCE ─────────────────────────────────────
+    def create_backup_page(self):
+        page = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; } QScrollArea > QWidget > QWidget { background: transparent; }")
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(35, 30, 35, 30)
+        layout.setSpacing(16)
+
+        title = QLabel("Backup & Maintenance")
+        title.setObjectName("pageTitle")
+        description = QLabel("Database backup snapshots, integrity verification, companion service health, and software updates.")
+        description.setObjectName("pageDescription")
+        layout.addWidget(title)
+        layout.addWidget(description)
+
+        # 1. Database & Companion Info Card
+        info_card = QFrame()
+        info_card.setObjectName("settingsCard")
+        i_layout = QVBoxLayout(info_card)
+        i_layout.setContentsMargins(20, 18, 20, 18)
+        i_layout.setSpacing(10)
+
+        i_title = QLabel("Database & Companion Service Status")
+        i_title.setObjectName("cardTitle")
+        i_layout.addWidget(i_title)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.backup_db_path_lbl = QLabel(str(DATABASE_PATH))
+        self.backup_db_path_lbl.setStyleSheet("font-family: monospace; font-size: 11px;")
+        form.addRow("Database Path:", self.backup_db_path_lbl)
+
+        self.backup_db_size_lbl = QLabel("—")
+        form.addRow("Database Size:", self.backup_db_size_lbl)
+
+        self.helper_status_lbl = QLabel("Checking...")
+        self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #15803D;")
+        form.addRow("CoachingHelper Service:", self.helper_status_lbl)
+        i_layout.addLayout(form)
+        layout.addWidget(info_card)
+
+        # 2. Create Backup Card
+        create_card = QFrame()
+        create_card.setObjectName("settingsCard")
+        c_layout = QVBoxLayout(create_card)
+        c_layout.setContentsMargins(20, 18, 20, 18)
+        c_layout.setSpacing(10)
+
+        c_title = QLabel("Create Database Backup")
+        c_title.setObjectName("cardTitle")
+        c_layout.addWidget(c_title)
+
+        c_row = QHBoxLayout()
+        self.backup_label_input = QLineEdit()
+        self.backup_label_input.setPlaceholderText("Optional label, e.g. pre_exam_results or month_end")
+        c_row.addWidget(self.backup_label_input, 1)
+
+        self.create_backup_btn = QPushButton("💾 Create Backup Now")
+        self.create_backup_btn.setObjectName("primaryButton")
+        self.create_backup_btn.clicked.connect(self._on_create_backup_clicked)
+        c_row.addWidget(self.create_backup_btn)
+        c_layout.addLayout(c_row)
+
+        c_hint = QLabel("🛡 Backups are generated using SQLite online backup API with transaction consistency and automatic integrity verification.")
+        c_hint.setObjectName("cardText")
+        c_layout.addWidget(c_hint)
+        layout.addWidget(create_card)
+
+        # 3. Existing Backups Card
+        list_card = QFrame()
+        list_card.setObjectName("settingsCard")
+        l_layout = QVBoxLayout(list_card)
+        l_layout.setContentsMargins(20, 18, 20, 18)
+        l_layout.setSpacing(10)
+
+        l_header = QHBoxLayout()
+        l_title = QLabel("Existing Backups")
+        l_title.setObjectName("cardTitle")
+        l_header.addWidget(l_title)
+        l_header.addStretch()
+
+        self.open_backup_dir_btn = QPushButton("📂 Open Backups Folder")
+        self.open_backup_dir_btn.clicked.connect(self._on_open_backup_dir)
+        l_header.addWidget(self.open_backup_dir_btn)
+
+        self.refresh_backups_btn = QPushButton("🔄 Refresh List")
+        self.refresh_backups_btn.clicked.connect(self.load_backup_page)
+        l_header.addWidget(self.refresh_backups_btn)
+        l_layout.addLayout(l_header)
+
+        self.backups_table = QTableWidget()
+        self.backups_table.setColumnCount(4)
+        self.backups_table.setHorizontalHeaderLabels([
+            "Backup Filename", "Size", "Created At", "Actions"
+        ])
+        configure_table_ux(
+            self.backups_table,
+            column_widths=[260, 90, 160, 140],
+            stretch_column=0,
+            default_row_height=40,
+        )
+        self.backups_table.setMinimumHeight(200)
+        l_layout.addWidget(self.backups_table)
+        layout.addWidget(list_card)
+
+        # 4. Updates & Maintenance Card
+        maint_card = QFrame()
+        maint_card.setObjectName("settingsCard")
+        m_layout = QVBoxLayout(maint_card)
+        m_layout.setContentsMargins(20, 18, 20, 18)
+        m_layout.setSpacing(10)
+
+        m_header = QHBoxLayout()
+        m_title = QLabel("Application Updates & Maintenance")
+        m_title.setObjectName("cardTitle")
+        m_header.addWidget(m_title)
+        m_header.addStretch()
+
+        self.version_lbl = QLabel("TAMS v2.0.0")
+        self.version_lbl.setStyleSheet("font-weight: 700; color: #012D54;")
+        m_header.addWidget(self.version_lbl)
+
+        self.check_updates_btn = QPushButton("🔄 Check for Updates")
+        self.check_updates_btn.clicked.connect(self._on_check_updates_clicked)
+        m_header.addWidget(self.check_updates_btn)
+        m_layout.addLayout(m_header)
+        layout.addWidget(maint_card)
+
+        layout.addStretch()
+        scroll.setWidget(container)
+
+        outer_layout = QVBoxLayout(page)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(scroll)
+        return page
+
+    def load_backup_page(self):
+        # 1. DB path and size
+        db_path = Path(DATABASE_PATH)
+        if db_path.exists():
+            size = db_path.stat().st_size
+            if size < 1024 * 1024:
+                self.backup_db_size_lbl.setText(f"{size / 1024:.1f} KB")
+            else:
+                self.backup_db_size_lbl.setText(f"{size / (1024 * 1024):.2f} MB")
+        else:
+            self.backup_db_size_lbl.setText("Not found")
+
+        # 2. Companion Status
+        status_path = get_helper_status_file_path()
+        if status_path.exists():
+            try:
+                with open(status_path, "r", encoding="utf-8") as f:
+                    s_data = json.load(f)
+                state = s_data.get("state", "UNKNOWN")
+                pid = s_data.get("pid", "—")
+                self.helper_status_lbl.setText(f"🟢 Active (PID: {pid}, State: {state})")
+                self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #15803D;")
+            except Exception:
+                self.helper_status_lbl.setText("⚪ Idle / Not Running")
+                self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #615F4B;")
+        else:
+            self.helper_status_lbl.setText("⚪ Inactive (Main App Mode)")
+            self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #615F4B;")
+
+        # 3. Populate Backups Table
+        backups = list_backups()
+        self.backups_table.setRowCount(len(backups))
+        for row, b in enumerate(backups):
+            self.backups_table.setItem(row, 0, QTableWidgetItem(b["filename"]))
+            self.backups_table.setItem(row, 1, QTableWidgetItem(b["size_formatted"]))
+            self.backups_table.setItem(row, 2, QTableWidgetItem(b["created_iso"]))
+
+            btn_widget = QWidget()
+            btn_layout = QHBoxLayout(btn_widget)
+            btn_layout.setContentsMargins(4, 2, 4, 2)
+            btn_layout.setSpacing(6)
+
+            restore_btn = QPushButton("Restore")
+            restore_btn.setStyleSheet(f"background-color: {CREAM}; color: {NAVY}; border: 1px solid {LIGHT_GOLD}; font-size: 11px; padding: 4px 8px; border-radius: 4px; font-weight: 600;")
+            restore_btn.clicked.connect(lambda checked=False, p=b["path"]: self._on_restore_backup_clicked(p))
+            btn_layout.addWidget(restore_btn)
+
+            delete_btn = QPushButton("Delete")
+            delete_btn.setStyleSheet("background-color: transparent; color: #DC2626; border: 1px solid #FECACA; font-size: 11px; padding: 4px 8px; border-radius: 4px; font-weight: 600;")
+            delete_btn.clicked.connect(lambda checked=False, p=b["path"]: self._on_delete_backup_clicked(p))
+            btn_layout.addWidget(delete_btn)
+
+            self.backups_table.setCellWidget(row, 3, btn_widget)
+
+    def _on_create_backup_clicked(self):
+        label = self.backup_label_input.text().strip() or None
+        res = create_database_backup(custom_label=label)
+        if res.get("success"):
+            self.backup_label_input.clear()
+            QMessageBox.information(
+                self,
+                "Backup Created",
+                f"✅ Database backup created successfully:\n\n"
+                f"File: {Path(res['backup_path']).name}\n"
+                f"Size: {res.get('size_bytes', 0) / 1024:.1f} KB\n"
+                f"Integrity check: Passed",
+            )
+            self.load_backup_page()
+        else:
+            QMessageBox.critical(
+                self,
+                "Backup Failed",
+                f"❌ Failed to create backup: {res.get('error')}",
+            )
+
+    def _on_restore_backup_clicked(self, backup_file: Path | str):
+        b_path = Path(backup_file)
+        confirm = QMessageBox.question(
+            self,
+            "Confirm Database Restore",
+            f"Are you sure you want to restore the database from:\n{b_path.name}?\n\n"
+            "A safety snapshot of your current database will be saved before restoring.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        result = restore_database_backup(b_path)
+        if result.get("success"):
+            QMessageBox.information(
+                self,
+                "Database Restored",
+                f"✅ Database successfully restored from {b_path.name}.\n\n"
+                f"Pre-restore safety snapshot created: {Path(result['safety_snapshot_path']).name}",
+            )
+            self.load_batches()
+            self.load_backup_page()
+        else:
+            QMessageBox.critical(
+                self,
+                "Restore Failed",
+                f"❌ Failed to restore database: {result.get('error')}",
+            )
+
+    def _on_delete_backup_clicked(self, backup_file: Path | str):
+        b_path = Path(backup_file)
+        confirm = QMessageBox.question(
+            self,
+            "Delete Backup",
+            f"Delete backup file '{b_path.name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm == QMessageBox.StandardButton.Yes:
+            try:
+                b_path.unlink(missing_ok=True)
+                self.load_backup_page()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to delete backup file: {e}")
+
+    def _on_check_updates_clicked(self):
+        res = check_for_updates()
+        QMessageBox.information(
+            self,
+            "Check for Updates",
+            f"ℹ️ {res.get('message')}\n\n"
+            f"Current Version: {res.get('current_version')}\n"
+            f"Latest Version: {res.get('latest_version')}",
+        )
+
+    def _on_open_backup_dir(self):
+        backup_dir = get_backup_directory()
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(backup_dir)))
+
 
     def apply_styles(self):
         self.setStyleSheet(f"""
@@ -637,6 +1412,116 @@ class SettingsDialog(QDialog):
             color: {MUTED};
             padding: 40px;
             font-size: 13px;
+        }}
+
+        /* ── Inputs & Focus ── */
+        QLineEdit, QTextEdit, QSpinBox, QTimeEdit, QComboBox {{
+            background: {WHITE};
+            color: {TEXT};
+            border: 1px solid {GOLD};
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 13px;
+        }}
+
+        QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QTimeEdit:focus, QComboBox:focus {{
+            border: 2px solid {NAVY};
+        }}
+
+        QLineEdit:disabled, QTextEdit:disabled, QSpinBox:disabled, QTimeEdit:disabled, QComboBox:disabled {{
+            background: {CREAM};
+            color: {MUTED};
+            border: 1px solid {LIGHT_GOLD};
+        }}
+
+        /* ── CheckBoxes & RadioButtons ── */
+        QCheckBox, QRadioButton {{
+            spacing: 8px;
+            font-size: 13px;
+            color: {TEXT};
+        }}
+
+        QCheckBox::indicator {{
+            width: 17px;
+            height: 17px;
+            border: 1px solid {GOLD};
+            border-radius: 4px;
+            background: {WHITE};
+        }}
+
+        QCheckBox::indicator:hover {{
+            border: 1px solid {NAVY};
+            background: {CREAM};
+        }}
+
+        QCheckBox::indicator:checked {{
+            background: {NAVY};
+            border: 1px solid {NAVY};
+        }}
+
+        QCheckBox::indicator:disabled {{
+            border: 1px solid {LIGHT_GOLD};
+            background: {CREAM};
+        }}
+
+        /* ── Tables ── */
+        QTableWidget {{
+            background: {WHITE};
+            border: 1px solid {LIGHT_GOLD};
+            border-radius: 8px;
+            gridline-color: #F1EBD3;
+            color: {TEXT};
+            font-size: 13px;
+            selection-background-color: {LIGHT_GOLD};
+            selection-color: {NAVY};
+            outline: none;
+        }}
+
+        QTableWidget::item {{
+            padding: 8px 10px;
+            border-bottom: 1px solid #F1EBD3;
+        }}
+
+        QTableWidget::item:selected {{
+            background-color: {LIGHT_GOLD};
+            color: {NAVY};
+        }}
+
+        QHeaderView::section {{
+            background: {NAVY};
+            color: {WHITE};
+            padding: 9px 10px;
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+        }}
+
+        /* ── GroupBox & ToolTip ── */
+        QGroupBox {{
+            border: 1px solid {LIGHT_GOLD};
+            border-radius: 8px;
+            margin-top: 16px;
+            padding-top: 14px;
+            background: {WHITE};
+            font-weight: 700;
+            color: {NAVY};
+        }}
+
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 12px;
+            padding: 0 6px;
+            color: {NAVY};
+        }}
+
+        QToolTip {{
+            background: {NAVY};
+            color: {WHITE};
+            border: 1px solid {GOLD};
+            border-radius: 5px;
+            padding: 5px 8px;
+            font-size: 12px;
         }}
         """)
     def load_batches(self):

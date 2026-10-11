@@ -33,6 +33,7 @@ from app.services.batch_service import (
     reactivate_batch,
     get_batch,
 )
+from app.ui.messaging_settings_widget import MessagingSettingsWidget
 
 
 NAVY = "#012D54"
@@ -93,14 +94,16 @@ class TAMSTimeEdit(QTimeEdit):
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_tab: int = 0):
         super().__init__(parent)
 
         self.setWindowTitle("TAMS Settings")
-        self.resize(900, 600)
+        self.resize(950, 680)
 
         self.setup_ui()
         self.apply_styles()
+        if initial_tab > 0 and initial_tab < self.settings_menu.count():
+            self.settings_menu.setCurrentRow(initial_tab)
 
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -180,10 +183,8 @@ class SettingsDialog(QDialog):
 
         self.pages.addWidget(self.create_general_page())
         self.pages.addWidget(self.create_batches_page())
-        self.pages.addWidget(self.create_placeholder_page(
-            "WhatsApp",
-            "WhatsApp configuration will be available here."
-        ))
+        self.messaging_settings_page = MessagingSettingsWidget()
+        self.pages.addWidget(self.messaging_settings_page)
         self.pages.addWidget(self.create_placeholder_page(
             "Backup & Maintenance",
             "Backup and application maintenance settings."

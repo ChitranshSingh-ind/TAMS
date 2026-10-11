@@ -10,6 +10,13 @@ from app.database.models.test_result import TestResult
 from app.database.models.attendance_override import AttendanceOverride
 from app.database.models.expense import Expense
 from app.database.models.expense_payment import ExpensePayment
+from app.database.models.message import (
+    Message,
+    MessageTemplate,
+    NotificationRule,
+    RecipientPreference,
+    MessagingConfig,
+)
 
 __all__ = [
     "Batch",
@@ -26,4 +33,9 @@ __all__ = [
     "AttendanceOverride",
     "Expense",
     "ExpensePayment",
+    "Message",
+    "MessageTemplate",
+    "NotificationRule",
+    "RecipientPreference",
+    "MessagingConfig",
 ]

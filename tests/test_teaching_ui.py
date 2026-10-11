@@ -190,3 +190,16 @@ def test_lesson_detail_dialog(qapp, sample_lesson):
     dlg = LessonDetailDialog(sample_lesson)
     # Just verify it opens without error
     dlg.close()
+
+
+def test_load_teaching_with_empty_lessons_and_records(qapp):
+    win = MainWindow()
+    win.change_page(6)  # Teaching page
+    # Filter by a search that yields 0 lessons
+    win.lesson_search_input.setText("NonExistentLesson_XYZ_999")
+    win.load_teaching()
+    assert win.lessons_table.rowCount() == 0
+    # Clear filter and reload
+    win.lesson_search_input.clear()
+    win.load_teaching()
+

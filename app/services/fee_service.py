@@ -481,6 +481,23 @@ def record_payment(
     session.commit()
     session.refresh(payment)
     session.refresh(fee)
+
+    try:
+        from app.services.messaging_service import trigger_automation_event
+        trigger_automation_event(
+            session,
+            event_type="PAYMENT_RECEIPT",
+            event_data={
+                "amount": f"{amount:,.2f}",
+                "payment_mode": payment_method,
+                "receipt_no": clean_receipt,
+            },
+            batch_id=fee.batch_id,
+            student_id=fee.student_id,
+        )
+    except Exception:
+        pass
+
     return payment
 
 

@@ -81,7 +81,7 @@ def test_create_expense_validation_and_creation(db_session):
         amount=15000.0,
         expense_date=date(2026, 10, 1),
         payee="City Commercial Hub",
-        due_date=date(2026, 10, 10),
+        due_date=date.today() + timedelta(days=10),
         notes="Rent for main hall",
     )
     assert exp.id is not None

@@ -93,6 +93,21 @@ def save_batch_attendance(
         saved_count += 1
 
     session.commit()
+
+    try:
+        from app.services.messaging_service import trigger_automation_event
+        for student_id, status in attendance_records.items():
+            if status == "ABSENT":
+                trigger_automation_event(
+                    session,
+                    event_type="ABSENCE",
+                    event_data={"date": attendance_date.strftime("%d %b %Y")},
+                    batch_id=batch_id,
+                    student_id=student_id,
+                )
+    except Exception:
+        pass
+
     return saved_count
 
 

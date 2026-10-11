@@ -133,6 +133,30 @@ def save_test_results(
         saved_count += 1
 
     session.commit()
+
+    try:
+        from app.services.messaging_service import trigger_automation_event
+        for entry in entries:
+            s_id = int(entry["student_id"])
+            m_val = int(entry["marks"])
+            pct = (m_val / test.max_marks * 100.0) if test.max_marks > 0 else 0.0
+            trigger_automation_event(
+                session,
+                event_type="TEST_RESULT",
+                event_data={
+                    "marks": m_val,
+                    "max_marks": test.max_marks,
+                    "percentage": f"{pct:.1f}",
+                    "test_name": test.name,
+                    "test_date": test.test_date.strftime("%d %b %Y"),
+                    "batch_avg": "—",
+                },
+                batch_id=test.batch_id,
+                student_id=s_id,
+            )
+    except Exception:
+        pass
+
     return saved_count
 
 

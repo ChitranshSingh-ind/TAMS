@@ -5,7 +5,7 @@ from app.database.models.attendance import Attendance
 from app.database.models.fee import Fee
 from app.database.models.fee_payment import FeePayment
 from app.database.models.test import TestModel
-from app.database.models.lesson import Lesson
+from app.database.models.lesson import Lesson, ClassRecord, Homework
 from app.database.models.test_result import TestResult
 from app.database.models.attendance_override import AttendanceOverride
 from app.database.models.expense import Expense
@@ -20,6 +20,8 @@ __all__ = [
     "FeePayment",
     "TestModel",
     "Lesson",
+    "ClassRecord",
+    "Homework",
     "TestResult",
     "AttendanceOverride",
     "Expense",

@@ -57,7 +57,32 @@ DEFAULT_CONFIGS: dict[str, str] = {
     "quiet_hours_start": "22:00",
     "quiet_hours_end": "07:00",
     "max_bulk_batch_size": "100",
+    # General & Coaching Profile
+    "coaching_name": "TAMS Coaching Academy",
+    "coaching_tagline": "Excellence in Education",
+    "coaching_phone": "",
+    "coaching_email": "",
+    "coaching_address": "",
+    "academic_session": "2026–2027",
+    # Operational & Academic Defaults
+    "currency_symbol": "₹",
+    "default_fee_due_day": "5",
+    "attendance_warning_threshold": "75",
+    "pass_percentage_threshold": "40",
+    # UI & Data Privacy
+    "ui_compact_tables": "false",
+    "ui_confirm_deletions": "true",
+    "ui_mask_phone_numbers": "false",
+    # WhatsApp & Automation enhancements
+    "default_country_code": "+91",
+    "emergency_automation_pause": "false",
+    "dry_run_mode": "false",
+    "max_daily_messages_per_student": "3",
+    # Backup & Maintenance
+    "max_backup_retention": "10",
+    "auto_backup_on_exit": "false",
 }
+
 
 DEFAULT_TEMPLATES: list[dict[str, Any]] = [
     {

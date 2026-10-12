@@ -2,8 +2,9 @@ import json
 import logging
 from datetime import datetime, time, timezone
 from pathlib import Path
-from PyQt6.QtCore import Qt, QTime, QUrl
+from PyQt6.QtCore import QObject, QThread, Qt, QTime, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QDesktopServices
+
 
 from PyQt6.QtWidgets import (
     QAbstractSpinBox,
@@ -137,7 +138,110 @@ class TAMSTimeEdit(QTimeEdit):
         self.setTime(self.time().addSecs(-15 * 60))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# BACKGROUND WORKER THREADS (QThread for non-blocking operations)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class WhatsAppTestWorker(QThread):
+    finished = pyqtSignal(dict)
+
+    def __init__(self, config_kwargs: dict, parent=None):
+        super().__init__(parent)
+        self.config_kwargs = config_kwargs
+
+    def run(self):
+        try:
+            with SessionLocal() as session:
+                provider = get_whatsapp_provider_client(session)
+                if self.config_kwargs.get("access_token"):
+                    provider.config.access_token = self.config_kwargs["access_token"]
+                if self.config_kwargs.get("phone_number_id"):
+                    provider.config.phone_number_id = self.config_kwargs["phone_number_id"]
+                if self.config_kwargs.get("api_version"):
+                    provider.config.api_version = self.config_kwargs["api_version"]
+                if self.config_kwargs.get("environment"):
+                    provider.config.environment = self.config_kwargs["environment"]
+                res = provider.test_connection()
+        except Exception as e:
+            res = {"success": False, "error": str(e)}
+        self.finished.emit(res)
+
+
+class BackupWorker(QThread):
+    finished = pyqtSignal(dict)
+
+    def __init__(self, custom_label: str | None, max_retention: int = 10, parent=None):
+        super().__init__(parent)
+        self.custom_label = custom_label
+        self.max_retention = max_retention
+
+    def run(self):
+        try:
+            res = create_database_backup(custom_label=self.custom_label, max_retention=self.max_retention)
+        except Exception as e:
+            res = {"success": False, "error": str(e)}
+        self.finished.emit(res)
+
+
+class RestoreWorker(QThread):
+    finished = pyqtSignal(dict)
+
+    def __init__(self, backup_file: Path | str, parent=None):
+        super().__init__(parent)
+        self.backup_file = backup_file
+
+    def run(self):
+        try:
+            res = restore_database_backup(self.backup_file)
+        except Exception as e:
+            res = {"success": False, "error": str(e)}
+        self.finished.emit(res)
+
+
+class DbMaintenanceWorker(QThread):
+    finished = pyqtSignal(dict)
+
+    def __init__(self, action: str = "integrity_check", parent=None):
+        super().__init__(parent)
+        self.action = action
+
+    def run(self):
+        import sqlite3
+        res = {"action": self.action, "success": True, "message": ""}
+        try:
+            conn = sqlite3.connect(str(DATABASE_PATH), timeout=30.0)
+            cur = conn.cursor()
+            if self.action == "integrity_check":
+                cur.execute("PRAGMA integrity_check")
+                row = cur.fetchone()
+                msg = row[0] if row else "Unknown result"
+                res["message"] = f"Integrity Check: {msg}"
+                res["success"] = (msg == "ok")
+            elif self.action == "vacuum":
+                cur.execute("VACUUM")
+                cur.execute("PRAGMA optimize")
+                conn.commit()
+                res["message"] = "Database vacuumed and index statistics optimized."
+            conn.close()
+        except Exception as e:
+            res["success"] = False
+            res["message"] = str(e)
+        self.finished.emit(res)
+
+
+class UpdateCheckWorker(QThread):
+    finished = pyqtSignal(dict)
+
+    def run(self):
+        try:
+            res = check_for_updates()
+        except Exception as e:
+            res = {"status": "error", "message": str(e)}
+        self.finished.emit(res)
+
+
 class SettingsDialog(QDialog):
+
     def __init__(self, parent=None, initial_tab: int = 0):
         super().__init__(parent)
 

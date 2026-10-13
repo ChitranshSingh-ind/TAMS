@@ -1,0 +1,6 @@
+# TAMS Production & Packaging Dependencies
+PyQt6>=6.6.0
+SQLAlchemy>=2.0.0
+alembic>=1.13.0
+pyinstaller>=6.3.0
+pytest>=8.0.0

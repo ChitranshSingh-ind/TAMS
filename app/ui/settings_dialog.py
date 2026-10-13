@@ -1,8 +1,9 @@
 import json
 import logging
+import sys
 from datetime import datetime, time, timezone
 from pathlib import Path
-from PyQt6.QtCore import QObject, QThread, Qt, QTime, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QThread, QTimer, Qt, QTime, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QDesktopServices
 
 
@@ -60,7 +61,14 @@ from app.services.batch_service import (
 )
 from app.services.coaching_helper_service import (
     check_for_updates,
+    get_helper_process_info,
     get_helper_status_file_path,
+    is_windows_autostart_enabled,
+    restart_helper_process,
+    set_windows_autostart,
+    start_helper_process,
+    stop_helper_process,
+    trigger_helper_queue_cycle,
 )
 from app.services.messaging_service import (
     ensure_messaging_seed_data,
@@ -76,8 +84,8 @@ from app.services.whatsapp_provider import (
     remove_access_token,
     save_access_token,
 )
-from app.ui.messaging_settings_widget import MessagingSettingsWidget, SendTestMessageDialog
-from app.ui.table_utils import configure_table_ux
+from app.ui.messaging_settings_widget import SendTestMessageDialog
+from app.ui.table_utils import TableSizingStrategy, auto_fit_columns, configure_table_ux
 
 
 
@@ -237,6 +245,19 @@ class UpdateCheckWorker(QThread):
             res = check_for_updates()
         except Exception as e:
             res = {"status": "error", "message": str(e)}
+        self.finished.emit(res)
+
+
+class ProcessQueueWorker(QThread):
+    finished = pyqtSignal(dict)
+
+    def run(self):
+        from app.services.messaging_service import process_message_queue
+        try:
+            with SessionLocal() as session:
+                res = process_message_queue(session, worker_id="SettingsDialogManual", batch_limit=20)
+        except Exception as e:
+            res = {"error": str(e), "processed": 0, "accepted": 0, "failed": 0}
         self.finished.emit(res)
 
 
@@ -806,29 +827,49 @@ class SettingsDialog(QDialog):
         form.setSpacing(10)
 
         self.auto_queue_enabled_cb = QCheckBox("Enable background message queue processing")
-        form.addRow("Queue Active:", self.auto_queue_enabled_cb)
+        q_act_lbl = QLabel("Queue Active:")
+        q_act_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(q_act_lbl, self.auto_queue_enabled_cb)
 
         self.auto_retry_limit_spin = QSpinBox()
         self.auto_retry_limit_spin.setRange(1, 10)
         self.auto_retry_limit_spin.setValue(3)
-        form.addRow("Max Retry Attempts:", self.auto_retry_limit_spin)
+        ret_lbl = QLabel("Max Retry Attempts:")
+        ret_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(ret_lbl, self.auto_retry_limit_spin)
 
         self.auto_backoff_base_spin = QSpinBox()
         self.auto_backoff_base_spin.setRange(10, 600)
         self.auto_backoff_base_spin.setValue(60)
         self.auto_backoff_base_spin.setSuffix(" seconds")
-        form.addRow("Exponential Backoff Base:", self.auto_backoff_base_spin)
+        bo_lbl = QLabel("Exponential Backoff Base:")
+        bo_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(bo_lbl, self.auto_backoff_base_spin)
 
         self.auto_polling_interval_spin = QSpinBox()
         self.auto_polling_interval_spin.setRange(5, 120)
         self.auto_polling_interval_spin.setValue(15)
         self.auto_polling_interval_spin.setSuffix(" seconds")
-        form.addRow("Companion Polling Interval:", self.auto_polling_interval_spin)
+        poll_lbl = QLabel("Companion Polling Interval:")
+        poll_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(poll_lbl, self.auto_polling_interval_spin)
+
+        self.auto_helper_autostart_tams_cb = QCheckBox("Automatically launch CoachingHelper companion when TAMS starts")
+        tams_lbl = QLabel("Autostart with TAMS:")
+        tams_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(tams_lbl, self.auto_helper_autostart_tams_cb)
+
+        self.auto_helper_autostart_windows_cb = QCheckBox("Start CoachingHelper companion at Windows login")
+        win_lbl = QLabel("Windows Startup:")
+        win_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(win_lbl, self.auto_helper_autostart_windows_cb)
 
         self.auto_max_bulk_spin = QSpinBox()
         self.auto_max_bulk_spin.setRange(10, 500)
         self.auto_max_bulk_spin.setValue(100)
-        form.addRow("Max Bulk Batch Size:", self.auto_max_bulk_spin)
+        bulk_lbl = QLabel("Max Bulk Batch Size:")
+        bulk_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(bulk_lbl, self.auto_max_bulk_spin)
         q_layout.addLayout(form)
         layout.addWidget(q_card)
 
@@ -846,13 +887,19 @@ class SettingsDialog(QDialog):
         qh_form = QFormLayout()
         qh_form.setSpacing(10)
         self.auto_quiet_hours_cb = QCheckBox("Pause message dispatching during quiet hours")
-        qh_form.addRow("Quiet Hours Active:", self.auto_quiet_hours_cb)
+        qh_act_lbl = QLabel("Quiet Hours Active:")
+        qh_act_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        qh_form.addRow(qh_act_lbl, self.auto_quiet_hours_cb)
 
         self.auto_quiet_start_edit = QTimeEdit(QTime(22, 0))
-        qh_form.addRow("Start Time:", self.auto_quiet_start_edit)
+        st_lbl = QLabel("Start Time:")
+        st_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        qh_form.addRow(st_lbl, self.auto_quiet_start_edit)
 
         self.auto_quiet_end_edit = QTimeEdit(QTime(7, 0))
-        qh_form.addRow("End Time:", self.auto_quiet_end_edit)
+        et_lbl = QLabel("End Time:")
+        et_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        qh_form.addRow(et_lbl, self.auto_quiet_end_edit)
         qh_layout.addLayout(qh_form)
 
         qh_hint = QLabel("🌙 Outgoing messages queued during quiet hours will hold in the queue and automatically dispatch once quiet hours conclude.")
@@ -884,7 +931,8 @@ class SettingsDialog(QDialog):
         configure_table_ux(
             self.auto_rules_table,
             column_widths=[220, 140, 100, 80, 180],
-            stretch_column=0,
+            flexible_columns=[0, 4],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
             default_row_height=38,
         )
         self.auto_rules_table.setMinimumHeight(180)
@@ -922,6 +970,11 @@ class SettingsDialog(QDialog):
             self.auto_retry_limit_spin.setValue(int(cfg.get("retry_limit", "3")))
             self.auto_backoff_base_spin.setValue(int(cfg.get("retry_backoff_base", "60")))
             self.auto_polling_interval_spin.setValue(int(cfg.get("helper_polling_interval", "15")))
+            self.auto_helper_autostart_tams_cb.setChecked(cfg.get("helper_autostart_with_tams", "true").lower() == "true")
+            self.auto_helper_autostart_windows_cb.setChecked(is_windows_autostart_enabled())
+            if sys.platform != "win32":
+                self.auto_helper_autostart_windows_cb.setEnabled(False)
+                self.auto_helper_autostart_windows_cb.setToolTip("Windows login autostart is only supported on Windows.")
             self.auto_max_bulk_spin.setValue(int(cfg.get("max_bulk_batch_size", "100")))
 
             self.auto_quiet_hours_cb.setChecked(cfg.get("quiet_hours_enabled", "false").lower() == "true")
@@ -952,6 +1005,7 @@ class SettingsDialog(QDialog):
 
                 tmpl_name = tmpls.get(r.template_id, "—")
                 self.auto_rules_table.setItem(row, 4, QTableWidgetItem(tmpl_name))
+            auto_fit_columns(self.auto_rules_table)
 
     def _on_save_automation_settings(self):
         new_configs = {
@@ -959,11 +1013,15 @@ class SettingsDialog(QDialog):
             "retry_limit": str(self.auto_retry_limit_spin.value()),
             "retry_backoff_base": str(self.auto_backoff_base_spin.value()),
             "helper_polling_interval": str(self.auto_polling_interval_spin.value()),
+            "helper_autostart_with_tams": "true" if self.auto_helper_autostart_tams_cb.isChecked() else "false",
             "max_bulk_batch_size": str(self.auto_max_bulk_spin.value()),
             "quiet_hours_enabled": "true" if self.auto_quiet_hours_cb.isChecked() else "false",
             "quiet_hours_start": self.auto_quiet_start_edit.time().toString("HH:mm"),
             "quiet_hours_end": self.auto_quiet_end_edit.time().toString("HH:mm"),
         }
+
+        if sys.platform == "win32":
+            set_windows_autostart(self.auto_helper_autostart_windows_cb.isChecked())
 
         with SessionLocal() as session:
             update_messaging_config(session, new_configs)
@@ -1027,7 +1085,37 @@ class SettingsDialog(QDialog):
         self.helper_status_lbl = QLabel("Checking...")
         self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #15803D;")
         form.addRow("CoachingHelper Service:", self.helper_status_lbl)
+
+        self.helper_details_lbl = QLabel("—")
+        self.helper_details_lbl.setWordWrap(True)
+        form.addRow("Service Diagnostics:", self.helper_details_lbl)
         i_layout.addLayout(form)
+
+        h_btn_row = QHBoxLayout()
+        h_btn_row.setSpacing(8)
+
+        self.helper_start_btn = QPushButton("▶ Start Helper")
+        self.helper_start_btn.setObjectName("secondaryButton")
+        self.helper_start_btn.clicked.connect(self._on_start_helper_clicked)
+
+        self.helper_stop_btn = QPushButton("⏹ Stop Helper")
+        self.helper_stop_btn.setObjectName("secondaryButton")
+        self.helper_stop_btn.clicked.connect(self._on_stop_helper_clicked)
+
+        self.helper_restart_btn = QPushButton("🔄 Restart Helper")
+        self.helper_restart_btn.setObjectName("secondaryButton")
+        self.helper_restart_btn.clicked.connect(self._on_restart_helper_clicked)
+
+        self.helper_process_btn = QPushButton("⚡ Process Queue Now")
+        self.helper_process_btn.setObjectName("primaryButton")
+        self.helper_process_btn.clicked.connect(self._on_process_helper_queue_clicked)
+
+        h_btn_row.addWidget(self.helper_start_btn)
+        h_btn_row.addWidget(self.helper_stop_btn)
+        h_btn_row.addWidget(self.helper_restart_btn)
+        h_btn_row.addWidget(self.helper_process_btn)
+        h_btn_row.addStretch()
+        i_layout.addLayout(h_btn_row)
         layout.addWidget(info_card)
 
         # 2. Create Backup Card
@@ -1086,8 +1174,10 @@ class SettingsDialog(QDialog):
         ])
         configure_table_ux(
             self.backups_table,
-            column_widths=[260, 90, 160, 140],
-            stretch_column=0,
+            column_widths=[260, 90, 160, 150],
+            flexible_columns=[0],
+            fixed_columns=[3],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
             default_row_height=40,
         )
         self.backups_table.setMinimumHeight(200)
@@ -1137,22 +1227,31 @@ class SettingsDialog(QDialog):
         else:
             self.backup_db_size_lbl.setText("Not found")
 
-        # 2. Companion Status
-        status_path = get_helper_status_file_path()
-        if status_path.exists():
-            try:
-                with open(status_path, "r", encoding="utf-8") as f:
-                    s_data = json.load(f)
-                state = s_data.get("state", "UNKNOWN")
-                pid = s_data.get("pid", "—")
-                self.helper_status_lbl.setText(f"🟢 Active (PID: {pid}, State: {state})")
-                self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #15803D;")
-            except Exception:
-                self.helper_status_lbl.setText("⚪ Idle / Not Running")
-                self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #615F4B;")
+        # 2. Companion Status & Diagnostics
+        info = get_helper_process_info()
+        running = info.get("running", False)
+        pid = info.get("pid")
+        state = info.get("state", "STOPPED")
+        is_online = info.get("is_online", True)
+        heartbeat = info.get("heartbeat_at")
+        summary = info.get("last_cycle_summary", {})
+
+        if running:
+            self.helper_status_lbl.setText(f"🟢 Active (PID: {pid}, State: {state}, {'Online' if is_online else 'Offline'})")
+            self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #15803D;")
+            hb_str = heartbeat.split("T")[1][:8] if (heartbeat and "T" in heartbeat) else "Active"
+            p_cnt = summary.get("processed", 0)
+            self.helper_details_lbl.setText(f"Heartbeat: {hb_str} UTC | Last Cycle: {p_cnt} messages processed")
+            self.helper_start_btn.setEnabled(False)
+            self.helper_stop_btn.setEnabled(True)
+            self.helper_restart_btn.setEnabled(True)
         else:
-            self.helper_status_lbl.setText("⚪ Inactive (Main App Mode)")
+            self.helper_status_lbl.setText("⚪ Inactive / Stopped (On-Demand Fallback)")
             self.helper_status_lbl.setStyleSheet("font-weight: 600; color: #615F4B;")
+            self.helper_details_lbl.setText("CoachingHelper background companion is not running. Queue is processed on-demand.")
+            self.helper_start_btn.setEnabled(True)
+            self.helper_stop_btn.setEnabled(False)
+            self.helper_restart_btn.setEnabled(False)
 
         # 3. Populate Backups Table
         backups = list_backups()
@@ -1178,6 +1277,7 @@ class SettingsDialog(QDialog):
             btn_layout.addWidget(delete_btn)
 
             self.backups_table.setCellWidget(row, 3, btn_widget)
+        auto_fit_columns(self.backups_table)
 
     def _on_create_backup_clicked(self):
         label = self.backup_label_input.text().strip() or None
@@ -1255,6 +1355,59 @@ class SettingsDialog(QDialog):
             f"Current Version: {res.get('current_version')}\n"
             f"Latest Version: {res.get('latest_version')}",
         )
+
+    def _on_start_helper_clicked(self):
+        self.helper_start_btn.setEnabled(False)
+        start_helper_process(headless=False)
+        QTimer.singleShot(600, self.load_backup_page)
+
+    def _on_stop_helper_clicked(self):
+        self.helper_stop_btn.setEnabled(False)
+        stop_helper_process(timeout_seconds=3.0)
+        QTimer.singleShot(600, self.load_backup_page)
+
+    def _on_restart_helper_clicked(self):
+        self.helper_restart_btn.setEnabled(False)
+        restart_helper_process()
+        QTimer.singleShot(800, self.load_backup_page)
+
+    def _on_process_helper_queue_clicked(self):
+        self.helper_process_btn.setEnabled(False)
+        self.helper_process_btn.setText("Processing...")
+
+        info = get_helper_process_info()
+        if info.get("running"):
+            trigger_helper_queue_cycle()
+            QMessageBox.information(
+                self,
+                "Queue Cycle Triggered",
+                "Triggered queue processing cycle on background CoachingHelper companion.",
+            )
+            self.helper_process_btn.setEnabled(True)
+            self.helper_process_btn.setText("⚡ Process Queue Now")
+            QTimer.singleShot(1000, self.load_backup_page)
+        else:
+            self._queue_worker = ProcessQueueWorker(self)
+
+            def on_done(res):
+                p = res.get("processed", 0)
+                a = res.get("accepted", 0)
+                f = res.get("failed", 0)
+                err = res.get("error")
+                if err:
+                    QMessageBox.warning(self, "Queue Processing Error", f"Error during queue run:\n{err}")
+                else:
+                    QMessageBox.information(
+                        self,
+                        "Queue Run Complete",
+                        f"Processed {p} messages.\nAccepted: {a} | Failed: {f}",
+                    )
+                self.helper_process_btn.setEnabled(True)
+                self.helper_process_btn.setText("⚡ Process Queue Now")
+                self.load_backup_page()
+
+            self._queue_worker.finished.connect(on_done)
+            self._queue_worker.start()
 
     def _on_open_backup_dir(self):
         backup_dir = get_backup_directory()
@@ -1441,6 +1594,12 @@ class SettingsDialog(QDialog):
 
             #cardText {{
                 color: {MUTED};
+                font-size: 13px;
+            }}
+
+            QFormLayout QLabel {{
+                color: {NAVY};
+                font-weight: 600;
                 font-size: 13px;
             }}
 

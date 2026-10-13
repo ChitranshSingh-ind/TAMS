@@ -29,15 +29,20 @@ DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 engine = create_engine(
     DATABASE_URL,
     echo=False,
+    connect_args={"timeout": 30.0},
 )
 
 
-# SQLite foreign keys are disabled by default.
-# TAMS needs them enabled for data integrity.
+# SQLite multi-process configuration for TAMS and CoachingHelper:
+# 1. Foreign keys enabled for relational integrity.
+# 2. Write-Ahead Logging (WAL) for concurrent read/write across processes.
+# 3. Busy timeout (30 seconds) to prevent 'database is locked' errors.
 @event.listens_for(engine, "connect")
-def enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+def configure_sqlite_connection(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.close()
 
 

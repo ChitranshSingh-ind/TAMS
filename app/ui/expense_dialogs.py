@@ -40,6 +40,7 @@ from app.services.financial_service import (
     get_financial_summary,
     get_monthly_financial_comparison,
 )
+from app.ui.table_utils import configure_table_ux, TableSizingStrategy, auto_fit_columns
 
 NAVY = "#012D54"
 DARK_NAVY = "#04294D"
@@ -536,31 +537,13 @@ class ExpensePaymentHistoryDialog(QDialog):
         ])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(40)
-        h = self.table.horizontalHeader()
-        h.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.setStyleSheet(f"""
-            QTableWidget {{
-                background: {WHITE};
-                border: 1px solid {LIGHT_GOLD};
-                border-radius: 8px;
-                gridline-color: #F1EBD3;
-                font-size: 12px;
-            }}
-            QHeaderView::section {{
-                background: {NAVY};
-                color: {WHITE};
-                padding: 8px;
-                border: none;
-                font-weight: 600;
-            }}
-        """)
+        configure_table_ux(
+            self.table,
+            column_widths=[120, 120, 110, 130, 200, 110, 120],
+            flexible_columns=[4],
+            fixed_columns=[6],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+        )
         layout.addWidget(self.table, 1)
 
         close_btn = QPushButton("Close")
@@ -632,6 +615,8 @@ class ExpensePaymentHistoryDialog(QDialog):
                 lbl = QLabel("—")
                 lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setCellWidget(row, 6, lbl)
+
+        auto_fit_columns(self.table)
 
     def confirm_reversal(self, payment_id: int, amount: float):
         reason_dialog = QDialog(self)
@@ -761,25 +746,12 @@ class FinancialAnalysisDialog(QDialog):
         ])
         trend_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         trend_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        trend_table.verticalHeader().setVisible(False)
-        trend_table.verticalHeader().setDefaultSectionSize(36)
-        trend_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        trend_table.setStyleSheet(f"""
-            QTableWidget {{
-                background: {WHITE};
-                border: 1px solid {LIGHT_GOLD};
-                border-radius: 8px;
-                gridline-color: #F1EBD3;
-                font-size: 12px;
-            }}
-            QHeaderView::section {{
-                background: {NAVY};
-                color: {WHITE};
-                padding: 8px;
-                border: none;
-                font-weight: 600;
-            }}
-        """)
+        configure_table_ux(
+            trend_table,
+            column_widths=[140, 160, 160, 150, 140, 140],
+            flexible_columns=[0, 1, 2, 3, 4, 5],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
+        )
 
         trend_table.setRowCount(len(monthly_data))
         for r, m in enumerate(monthly_data):
@@ -812,6 +784,7 @@ class FinancialAnalysisDialog(QDialog):
             ei_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             trend_table.setItem(r, 5, ei_item)
 
+        auto_fit_columns(trend_table)
         layout.addWidget(trend_table, 1)
 
         close_btn = QPushButton("Close")

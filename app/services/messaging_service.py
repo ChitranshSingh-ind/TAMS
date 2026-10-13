@@ -11,10 +11,11 @@ import csv
 import io
 import json
 import logging
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database.models.batch import Batch
@@ -474,6 +475,7 @@ def queue_message(
     batch_id: int | None = None,
     template_id: int | None = None,
     template_name: str | None = None,
+    parameters: list[str] | dict[str, Any] | None = None,
     category: str = "UTILITY",
     trigger_type: str = "MANUAL",
     source_module: str | None = None,
@@ -485,6 +487,10 @@ def queue_message(
     if not is_valid:
         raise ValueError(f"Cannot queue message: {reason}")
 
+    params_json_str = None
+    if parameters is not None:
+        params_json_str = json.dumps(parameters) if not isinstance(parameters, str) else parameters
+
     msg = Message(
         recipient_phone=e164_phone,
         recipient_name=recipient_name,
@@ -493,6 +499,7 @@ def queue_message(
         batch_id=batch_id,
         template_id=template_id,
         template_name=template_name,
+        parameters_json=params_json_str,
         message_body=message_body.strip(),
         category=category,
         trigger_type=trigger_type,
@@ -526,6 +533,12 @@ def queue_bulk_messages(
     env = cfg.get("whatsapp_environment", "DEVELOPMENT")
     queued_count = 0
 
+    template = None
+    if template_id:
+        template = session.get(MessageTemplate, template_id)
+    if not template and template_name:
+        template = session.scalar(select(MessageTemplate).where(MessageTemplate.name == template_name))
+
     for r in recipients:
         phone = r["phone"]
         r_name = r.get("recipient_name", "Parent")
@@ -535,6 +548,14 @@ def queue_bulk_messages(
             "recipient_name": r_name,
         }
         body = render_template_text(message_body_template, context)
+
+        params_list = None
+        if template and template.parameters_json:
+            try:
+                param_keys = json.loads(template.parameters_json)
+                params_list = [str(context.get(k, "")) for k in param_keys]
+            except Exception:
+                params_list = None
 
         queue_message(
             session,
@@ -546,6 +567,7 @@ def queue_bulk_messages(
             batch_id=r.get("batch_id"),
             template_id=template_id,
             template_name=template_name,
+            parameters=params_list,
             category=category,
             trigger_type=trigger_type,
             source_module=source_module,
@@ -581,14 +603,71 @@ def is_within_quiet_hours(cfg: dict[str, str]) -> bool:
         return False
 
 
+def extract_template_parameters(
+    message: Message,
+    template: MessageTemplate,
+) -> tuple[bool, list[str], str]:
+    """
+    Extracts and validates ordered parameter list for Meta template message.
+    Returns: (is_valid: bool, parameters: list[str], error_message: str)
+    """
+    expected_param_keys = []
+    if template.parameters_json:
+        try:
+            expected_param_keys = json.loads(template.parameters_json)
+        except Exception:
+            expected_param_keys = []
+
+    # 1. Check message.parameters_json
+    if message.parameters_json:
+        try:
+            params = json.loads(message.parameters_json)
+            if isinstance(params, list):
+                if expected_param_keys and len(params) != len(expected_param_keys):
+                    return False, [], f"Template parameter mismatch: expected {len(expected_param_keys)} parameters ({expected_param_keys}), got {len(params)}"
+                return True, [str(p) for p in params], ""
+            elif isinstance(params, dict):
+                ordered = []
+                for k in expected_param_keys:
+                    if k not in params:
+                        return False, [], f"Missing required template parameter: '{k}'"
+                    ordered.append(str(params[k]))
+                return True, ordered, ""
+        except Exception as e:
+            return False, [], f"Invalid parameters_json format: {e}"
+
+    # 2. If template requires no parameters (e.g. hello_world)
+    if not expected_param_keys:
+        return True, [], ""
+
+    # 3. Fallback: Parse from rendered message_body using template.body regex
+    try:
+        pattern = re.escape(template.body)
+        for idx, key in enumerate(expected_param_keys, 1):
+            pattern = pattern.replace(r"\{\{" + key + r"\}\}", rf"(?P<{key}>.+?)")
+            pattern = pattern.replace(r"\{\{\ " + key + r"\ \}\}", rf"(?P<{key}>.+?)")
+            pattern = pattern.replace(r"\{\{" + str(idx) + r"\}\}", rf"(?P<{key}>.+?)")
+            pattern = pattern.replace(r"\{\{\ " + str(idx) + r"\ \}\}", rf"(?P<{key}>.+?)")
+        pattern = "^" + pattern + "$"
+        match = re.match(pattern, message.message_body.strip())
+        if match:
+            params = [str(match.group(k)) for k in expected_param_keys]
+            return True, params, ""
+    except Exception:
+        pass
+
+    # Required parameters could not be resolved
+    return False, [], f"Missing required parameters for template '{template.name}'. Expected keys: {expected_param_keys}"
+
+
 def process_message_queue(
     session: Session,
     worker_id: str = "TAMS_QueueWorker",
     batch_limit: int = 10,
 ) -> dict[str, Any]:
     """
-    Processes eligible pending messages using a claim/lease mechanism.
-    Safe for SQLite concurrency and crash recovery.
+    Processes eligible pending messages using atomic claim/lease locking.
+    Safe for SQLite multi-process concurrency, network timeouts, and crash recovery.
     Returns processing summary: {'processed': N, 'accepted': N, 'failed': N, 'retried': N}
     """
     cfg = get_messaging_config(session)
@@ -602,14 +681,21 @@ def process_message_queue(
     lease_duration = timedelta(seconds=90)
     lease_expiry = now + lease_duration
 
-    # 1. Atomic claim of eligible messages (QUEUED or RETRY_SCHEDULED where retry time arrived)
+    # 1. Identify candidate messages:
+    # - New messages: status == "QUEUED"
+    # - Scheduled retries: status == "RETRY_SCHEDULED" where next_retry_at <= now
+    # - Recover expired leases (worker crash recovery): status == "SENDING" where leased_until < now
     claim_stmt = select(Message).where(
         or_(
             Message.status == "QUEUED",
             and_(
                 Message.status == "RETRY_SCHEDULED",
                 Message.next_retry_at <= now,
-            )
+            ),
+            and_(
+                Message.status == "SENDING",
+                Message.leased_until < now,
+            ),
         ),
         or_(
             Message.leased_until.is_(None),
@@ -617,17 +703,39 @@ def process_message_queue(
         )
     ).order_by(Message.queued_at.asc()).limit(batch_limit)
 
-    messages_to_claim = list(session.scalars(claim_stmt).all())
-    if not messages_to_claim:
+    candidate_messages = list(session.scalars(claim_stmt).all())
+    if not candidate_messages:
         return {"status": "IDLE", "processed": 0, "accepted": 0, "failed": 0, "retried": 0}
 
-    # Lease and claim
-    for m in messages_to_claim:
-        m.status = "SENDING"
-        m.lease_holder = worker_id
-        m.leased_until = lease_expiry
+    # Atomically claim candidates using UPDATE to prevent competing workers from double-claiming
+    claimed_ids = []
+    for cand in candidate_messages:
+        claim_update = (
+            update(Message)
+            .where(
+                Message.id == cand.id,
+                or_(Message.leased_until.is_(None), Message.leased_until < now),
+            )
+            .values(
+                status="SENDING",
+                lease_holder=worker_id,
+                leased_until=lease_expiry,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        res = session.execute(claim_update)
+        if res.rowcount == 1:
+            claimed_ids.append(cand.id)
 
     session.commit()
+
+    if not claimed_ids:
+        return {"status": "IDLE", "processed": 0, "accepted": 0, "failed": 0, "retried": 0}
+
+    # Fetch fresh claimed messages
+    messages_to_process = list(
+        session.scalars(select(Message).where(Message.id.in_(claimed_ids))).all()
+    )
 
     # 2. Process each claimed message with provider
     provider = get_whatsapp_provider_client(session)
@@ -636,16 +744,50 @@ def process_message_queue(
     failed_cnt = 0
     retried_cnt = 0
 
-    for m in messages_to_claim:
+    for m in messages_to_process:
         try:
-            # Send template or free-form text
-            if m.template_name:
+            # Check if this message uses a pre-configured template
+            template = None
+            if m.template_id:
+                template = session.get(MessageTemplate, m.template_id)
+            if not template and m.template_name:
+                template = session.scalar(
+                    select(MessageTemplate).where(MessageTemplate.name == m.template_name)
+                )
+
+            if template:
+                # Validate parameters against template definition
+                valid, params, err_msg = extract_template_parameters(m, template)
+                if not valid:
+                    # Parameter mismatch: fail before sending to provider
+                    m.status = "FAILED"
+                    m.error_code = "PARAM_MISMATCH"
+                    m.error_message = err_msg
+                    m.lease_holder = None
+                    m.leased_until = None
+                    failed_cnt += 1
+                    session.commit()
+                    continue
+
+                # Correct Meta WhatsApp template fields:
+                meta_template_name = template.meta_template_name
+                lang_code = template.language or "en_US"
+
+                res = provider.send_template_message(
+                    recipient_phone=m.recipient_phone,
+                    template_name=meta_template_name,
+                    language_code=lang_code,
+                    parameters=params if params else None,
+                )
+            elif m.template_name:
+                # Template name without template record (fallback)
                 res = provider.send_template_message(
                     recipient_phone=m.recipient_phone,
                     template_name=m.template_name,
-                    language_code="en",
+                    language_code="en_US",
                 )
             else:
+                # Free-form text message (applicable within 24h window)
                 res = provider.send_text_message(
                     recipient_phone=m.recipient_phone,
                     message_body=m.message_body,
@@ -661,19 +803,23 @@ def process_message_queue(
                 m.leased_until = None
                 accepted_cnt += 1
             else:
+                err_text = res.error_message or "Unknown failure"
+                if getattr(res, "is_ambiguous", False):
+                    err_text = f"[AMBIGUOUS_OUTCOME] {err_text}"
+
                 if res.is_retryable and m.retry_count < m.max_retries:
                     m.status = "RETRY_SCHEDULED"
                     m.retry_count += 1
                     backoff_secs = backoff_base * (2 ** (m.retry_count - 1))
                     m.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=backoff_secs)
-                    m.error_message = res.error_message
+                    m.error_message = err_text
                     m.error_code = res.error_code
                     m.lease_holder = None
                     m.leased_until = None
                     retried_cnt += 1
                 else:
                     m.status = "FAILED"
-                    m.error_message = res.error_message
+                    m.error_message = err_text
                     m.error_code = res.error_code
                     m.lease_holder = None
                     m.leased_until = None
@@ -691,7 +837,7 @@ def process_message_queue(
 
     return {
         "status": "COMPLETED",
-        "processed": len(messages_to_claim),
+        "processed": len(messages_to_process),
         "accepted": accepted_cnt,
         "failed": failed_cnt,
         "retried": retried_cnt,
@@ -712,9 +858,9 @@ def retry_failed_message(session: Session, message_id: int) -> bool:
 
 
 def cancel_pending_message(session: Session, message_id: int) -> bool:
-    """Cancels a pending or retry-scheduled message."""
+    """Cancels a pending or retry-scheduled message if not currently in flight."""
     msg = session.get(Message, message_id)
-    if not msg or msg.status in ("ACCEPTED", "DELIVERED", "READ", "CANCELLED"):
+    if not msg or msg.status in ("SENDING", "ACCEPTED", "DELIVERED", "READ", "CANCELLED"):
         return False
     msg.status = "CANCELLED"
     msg.lease_holder = None

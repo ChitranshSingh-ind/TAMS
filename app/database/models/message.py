@@ -77,6 +77,7 @@ class Message(Base):
     )
 
     template_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    parameters_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     message_body: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(50), default="UTILITY")
     trigger_type: Mapped[str] = mapped_column(String(30), default="MANUAL")  # MANUAL, AUTOMATED

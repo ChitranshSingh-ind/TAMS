@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
 )
 from sqlalchemy import select
 
+from app.ui.table_utils import configure_table_ux, TableSizingStrategy, auto_fit_columns
+
 from app.database.connection import SessionLocal
 from app.database.models.batch import Batch
 from app.database.models.student import Student
@@ -182,27 +184,12 @@ class GenerateFeesDialog(QDialog):
         ])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.setStyleSheet(f"""
-            QTableWidget {{
-                background: {WHITE};
-                border: 1px solid {LIGHT_GOLD};
-                border-radius: 8px;
-                gridline-color: #F1EBD3;
-                font-size: 12px;
-            }}
-            QHeaderView::section {{
-                background: {NAVY};
-                color: {WHITE};
-                padding: 8px;
-                border: none;
-                font-weight: 600;
-            }}
-        """)
+        configure_table_ux(
+            self.table,
+            column_widths=[140, 200, 140, 130, 120],
+            flexible_columns=[1, 2],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+        )
         layout.addWidget(self.table, 1)
 
         # Dialog buttons
@@ -288,6 +275,7 @@ class GenerateFeesDialog(QDialog):
             f"Already Exists: {already}"
         )
         self.generate_btn.setEnabled(to_gen > 0)
+        auto_fit_columns(self.table)
 
     def confirm_generation(self):
         academic_year = self.year_combo.currentText()
@@ -516,28 +504,13 @@ class PaymentHistoryDialog(QDialog):
         ])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.setStyleSheet(f"""
-            QTableWidget {{
-                background: {WHITE};
-                border: 1px solid {LIGHT_GOLD};
-                border-radius: 8px;
-                gridline-color: #F1EBD3;
-                font-size: 12px;
-            }}
-            QHeaderView::section {{
-                background: {NAVY};
-                color: {WHITE};
-                padding: 8px;
-                border: none;
-                font-weight: 600;
-            }}
-        """)
+        configure_table_ux(
+            self.table,
+            column_widths=[120, 150, 120, 110, 200, 110, 120],
+            flexible_columns=[4],
+            fixed_columns=[6],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+        )
         layout.addWidget(self.table, 1)
 
         close_btn = QPushButton("Close")
@@ -609,6 +582,8 @@ class PaymentHistoryDialog(QDialog):
                 lbl = QLabel("—")
                 lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setCellWidget(row, 6, lbl)
+
+        auto_fit_columns(self.table)
 
     def confirm_reversal(self, payment_id: int, amount: float):
         reason_dialog = QDialog(self)

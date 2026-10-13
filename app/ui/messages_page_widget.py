@@ -62,7 +62,13 @@ from app.services.messaging_service import (
 )
 from app.ui.chart_widgets import SegmentedDistributionWidget
 from app.ui.messaging_settings_widget import MessagingSettingsWidget
-from app.ui.table_utils import configure_table_ux, restore_table_state, save_table_state
+from app.ui.table_utils import (
+    configure_table_ux,
+    restore_table_state,
+    save_table_state,
+    TableSizingStrategy,
+    auto_fit_columns,
+)
 
 # TAMS Palette
 NAVY = "#012D54"
@@ -201,24 +207,38 @@ class BulkSendConfirmationDialog(QDialog):
         # Eligible Table
         e_table = QTableWidget(len(eligible), 4)
         e_table.setHorizontalHeaderLabels(["Recipient", "Student", "Batch", "Phone Number"])
-        configure_table_ux(e_table, column_widths=[140, 140, 120, 130], stretch_column=0)
+        configure_table_ux(
+            e_table,
+            column_widths=[140, 140, 120, 130],
+            stretch_column=0,
+            flexible_columns=[0, 1],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+        )
         for row, r in enumerate(eligible):
             e_table.setItem(row, 0, QTableWidgetItem(r.get("recipient_name", "")))
             e_table.setItem(row, 1, QTableWidgetItem(r.get("student_name", "")))
             e_table.setItem(row, 2, QTableWidgetItem(r.get("batch_name", "")))
             e_table.setItem(row, 3, QTableWidgetItem(r.get("masked_phone", "")))
+        auto_fit_columns(e_table)
         tabs.addTab(e_table, f"Eligible Recipients ({len(eligible)})")
 
         # Skipped Table
         s_table = QTableWidget(len(skipped), 3)
         s_table.setHorizontalHeaderLabels(["Contact Name", "Student", "Reason for Skipping"])
-        configure_table_ux(s_table, column_widths=[140, 140, 260], stretch_column=2)
+        configure_table_ux(
+            s_table,
+            column_widths=[140, 140, 260],
+            stretch_column=2,
+            flexible_columns=[2],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+        )
         for row, s in enumerate(skipped):
             s_table.setItem(row, 0, QTableWidgetItem(s.get("name", "")))
             s_table.setItem(row, 1, QTableWidgetItem(s.get("student_name", "")))
             reason_item = QTableWidgetItem(s.get("reason", ""))
             reason_item.setForeground(QColor("#DC2626"))
             s_table.setItem(row, 2, reason_item)
+        auto_fit_columns(s_table)
         tabs.addTab(s_table, f"Skipped ({len(skipped)})")
 
         layout.addWidget(tabs, 1)
@@ -251,6 +271,13 @@ class MessagesPageWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
+        self.setObjectName("messagesPage")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            QWidget#messagesPage {{
+                background-color: {CREAM};
+            }}
+        """)
         self.setup_ui()
 
     def setup_ui(self):
@@ -291,7 +318,7 @@ class MessagesPageWidget(QWidget):
         self.tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: 1px solid {LIGHT_GOLD};
-                background: {WHITE};
+                background: {CREAM};
                 border-radius: 6px;
             }}
             QTabBar::tab {{
@@ -327,10 +354,27 @@ class MessagesPageWidget(QWidget):
     # ─────────────────────────────────────────────────────────────────────────
     def _create_overview_tab(self) -> QWidget:
         scroll = QScrollArea()
+        scroll.setObjectName("overviewScrollArea")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        if scroll.viewport():
+            scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            scroll.viewport().setStyleSheet(f"background-color: {CREAM};")
+        scroll.setStyleSheet(f"""
+            QScrollArea#overviewScrollArea {{
+                background-color: {CREAM};
+                border: none;
+            }}
+            QScrollArea#overviewScrollArea > QWidget > QWidget {{
+                background-color: {CREAM};
+            }}
+        """)
 
         container = QWidget()
+        container.setObjectName("overviewContainer")
+        container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        container.setStyleSheet(f"#overviewContainer {{ background-color: {CREAM}; }}")
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
@@ -401,6 +445,17 @@ class MessagesPageWidget(QWidget):
     # ─────────────────────────────────────────────────────────────────────────
     def _create_compose_tab(self) -> QWidget:
         widget = QWidget()
+        widget.setObjectName("composeTabWidget")
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        widget.setStyleSheet(f"""
+            #composeTabWidget {{
+                background-color: {CREAM};
+            }}
+            #composeTabWidget QLabel {{
+                color: {NAVY};
+                font-weight: 600;
+            }}
+        """)
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(16)
@@ -413,7 +468,9 @@ class MessagesPageWidget(QWidget):
 
         # Target Mode Combo
         mode_row = QHBoxLayout()
-        mode_row.addWidget(QLabel("Target Mode:"))
+        mode_lbl = QLabel("Target Mode:")
+        mode_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        mode_row.addWidget(mode_lbl)
         self.compose_mode_combo = QComboBox()
         self.compose_mode_combo.addItem("Select Batch", "BATCH")
         self.compose_mode_combo.addItem("Select Specific Students", "STUDENT")
@@ -426,7 +483,9 @@ class MessagesPageWidget(QWidget):
         self.compose_batch_box = QWidget()
         bb_layout = QHBoxLayout(self.compose_batch_box)
         bb_layout.setContentsMargins(0, 0, 0, 0)
-        bb_layout.addWidget(QLabel("Batch:"))
+        batch_lbl = QLabel("Batch:")
+        batch_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        bb_layout.addWidget(batch_lbl)
         self.compose_batch_combo = QComboBox()
         self.compose_batch_combo.currentIndexChanged.connect(self._update_compose_recipients)
         bb_layout.addWidget(self.compose_batch_combo, 1)
@@ -436,6 +495,9 @@ class MessagesPageWidget(QWidget):
         self.compose_student_box = QWidget()
         sb_layout = QVBoxLayout(self.compose_student_box)
         sb_layout.setContentsMargins(0, 0, 0, 0)
+        sb_lbl = QLabel("Select Students:")
+        sb_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        sb_layout.addWidget(sb_lbl)
         self.compose_student_search = QLineEdit()
         self.compose_student_search.setPlaceholderText("Search students by name or admission number...")
         self.compose_student_search.textChanged.connect(self._filter_compose_students)
@@ -444,7 +506,13 @@ class MessagesPageWidget(QWidget):
         self.compose_students_table = QTableWidget()
         self.compose_students_table.setColumnCount(3)
         self.compose_students_table.setHorizontalHeaderLabels(["Select", "Student Name", "Admission No."])
-        configure_table_ux(self.compose_students_table, column_widths=[60, 160, 100], stretch_column=1)
+        configure_table_ux(
+            self.compose_students_table,
+            column_widths=[70, 200, 140],
+            stretch_column=1,
+            flexible_columns=[1],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+        )
         sb_layout.addWidget(self.compose_students_table, 1)
         self.compose_student_box.setVisible(False)
         left_layout.addWidget(self.compose_student_box, 1)
@@ -458,15 +526,19 @@ class MessagesPageWidget(QWidget):
         self.compose_custom_phone.textChanged.connect(self._update_compose_recipients)
         self.compose_custom_name = QLineEdit()
         self.compose_custom_name.setPlaceholderText("Parent / Contact Name")
-        cb_layout.addRow("Phone:", self.compose_custom_phone)
-        cb_layout.addRow("Name:", self.compose_custom_name)
+        phone_lbl = QLabel("Phone:")
+        phone_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        name_lbl = QLabel("Name:")
+        name_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        cb_layout.addRow(phone_lbl, self.compose_custom_phone)
+        cb_layout.addRow(name_lbl, self.compose_custom_name)
         self.compose_custom_box.setVisible(False)
         left_layout.addWidget(self.compose_custom_box)
 
         # Live Deduplication Summary Banner
         self.compose_recipient_summary_lbl = QLabel("0 recipients selected")
         self.compose_recipient_summary_lbl.setStyleSheet(
-            f"background-color: {CREAM}; border: 1px solid {LIGHT_GOLD}; padding: 8px; border-radius: 6px; font-weight: 600; font-size: 12px;"
+            f"background-color: {CREAM}; border: 1px solid {LIGHT_GOLD}; padding: 8px; border-radius: 6px; font-weight: 600; font-size: 12px; color: {NAVY};"
         )
         left_layout.addWidget(self.compose_recipient_summary_lbl)
 
@@ -479,19 +551,25 @@ class MessagesPageWidget(QWidget):
         right_layout.setSpacing(10)
 
         tmpl_row = QHBoxLayout()
-        tmpl_row.addWidget(QLabel("Use Template:"))
+        tmpl_lbl = QLabel("Use Template:")
+        tmpl_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        tmpl_row.addWidget(tmpl_lbl)
         self.compose_template_combo = QComboBox()
         self.compose_template_combo.currentIndexChanged.connect(self._on_compose_template_changed)
         tmpl_row.addWidget(self.compose_template_combo, 1)
         right_layout.addLayout(tmpl_row)
 
-        right_layout.addWidget(QLabel("Message Text (supports {{student_name}}, {{batch_name}}):"))
+        body_lbl = QLabel("Message Text (supports {{student_name}}, {{batch_name}}):")
+        body_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        right_layout.addWidget(body_lbl)
         self.compose_body_edit = QTextEdit()
         self.compose_body_edit.setPlaceholderText("Write custom message or select template...")
         self.compose_body_edit.textChanged.connect(self._update_compose_preview)
         right_layout.addWidget(self.compose_body_edit, 1)
 
-        right_layout.addWidget(QLabel("Live Interpolated Preview:"))
+        prev_lbl = QLabel("Live Interpolated Preview:")
+        prev_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        right_layout.addWidget(prev_lbl)
         self.compose_preview_lbl = QTextEdit()
         self.compose_preview_lbl.setReadOnly(True)
         self.compose_preview_lbl.setFixedHeight(90)
@@ -645,6 +723,17 @@ class MessagesPageWidget(QWidget):
     # ─────────────────────────────────────────────────────────────────────────
     def _create_history_tab(self) -> QWidget:
         widget = QWidget()
+        widget.setObjectName("historyTabWidget")
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        widget.setStyleSheet(f"""
+            #historyTabWidget {{
+                background-color: {CREAM};
+            }}
+            #historyTabWidget QLabel {{
+                color: {NAVY};
+                font-weight: 600;
+            }}
+        """)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
@@ -659,13 +748,17 @@ class MessagesPageWidget(QWidget):
         self.history_search = QLineEdit()
         self.history_search.setPlaceholderText("Search recipient, student, or phone...")
         self.history_search.textChanged.connect(self._filter_history_table)
-        f_layout.addWidget(QLabel("Search:"), 0, 0)
+        search_lbl = QLabel("Search:")
+        search_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        f_layout.addWidget(search_lbl, 0, 0)
         f_layout.addWidget(self.history_search, 0, 1)
 
         self.history_batch_filter = QComboBox()
         self.history_batch_filter.addItem("All Batches", None)
         self.history_batch_filter.currentIndexChanged.connect(self._filter_history_table)
-        f_layout.addWidget(QLabel("Batch:"), 0, 2)
+        batch_lbl = QLabel("Batch:")
+        batch_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        f_layout.addWidget(batch_lbl, 0, 2)
         f_layout.addWidget(self.history_batch_filter, 0, 3)
 
         self.history_status_filter = QComboBox()
@@ -673,20 +766,26 @@ class MessagesPageWidget(QWidget):
             "All Statuses", "QUEUED", "SENDING", "ACCEPTED", "DELIVERED", "READ", "FAILED", "RETRY_SCHEDULED", "CANCELLED"
         ])
         self.history_status_filter.currentIndexChanged.connect(self._filter_history_table)
-        f_layout.addWidget(QLabel("Status:"), 0, 4)
+        status_lbl = QLabel("Status:")
+        status_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        f_layout.addWidget(status_lbl, 0, 4)
         f_layout.addWidget(self.history_status_filter, 0, 5)
 
         # Row 2: Category, Trigger, Export CSV
         self.history_cat_filter = QComboBox()
         self.history_cat_filter.addItems(["All Categories", "UTILITY", "MARKETING", "AUTHENTICATION"])
         self.history_cat_filter.currentIndexChanged.connect(self._filter_history_table)
-        f_layout.addWidget(QLabel("Category:"), 1, 0)
+        cat_lbl = QLabel("Category:")
+        cat_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        f_layout.addWidget(cat_lbl, 1, 0)
         f_layout.addWidget(self.history_cat_filter, 1, 1)
 
         self.history_trigger_filter = QComboBox()
         self.history_trigger_filter.addItems(["All Triggers", "MANUAL", "AUTOMATED"])
         self.history_trigger_filter.currentIndexChanged.connect(self._filter_history_table)
-        f_layout.addWidget(QLabel("Trigger:"), 1, 2)
+        trig_lbl = QLabel("Trigger:")
+        trig_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        f_layout.addWidget(trig_lbl, 1, 2)
         f_layout.addWidget(self.history_trigger_filter, 1, 3)
 
         self.export_csv_btn = QPushButton("📥 Export Filtered CSV")
@@ -706,6 +805,9 @@ class MessagesPageWidget(QWidget):
             self.history_table,
             column_widths=[140, 140, 140, 120, 120, 140, 100, 70, 150, 80],
             stretch_column=1,
+            flexible_columns=[1, 2, 5],
+            fixed_columns=[9],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
         layout.addWidget(self.history_table, 1)
 
@@ -759,6 +861,8 @@ class MessagesPageWidget(QWidget):
             view_btn.clicked.connect(lambda checked=False, mid=r["id"]: self._inspect_message_details(mid))
             self.history_table.setCellWidget(row, 9, view_btn)
 
+        auto_fit_columns(self.history_table)
+
     def _inspect_message_details(self, message_id: int):
         dlg = MessageDetailsDialog(message_id, self)
         dlg.exec()
@@ -790,6 +894,9 @@ class MessagesPageWidget(QWidget):
     # ─────────────────────────────────────────────────────────────────────────
     def _create_queue_tab(self) -> QWidget:
         widget = QWidget()
+        widget.setObjectName("queueTabWidget")
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        widget.setStyleSheet(f"#queueTabWidget {{ background-color: {CREAM}; }}")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
@@ -825,6 +932,9 @@ class MessagesPageWidget(QWidget):
             self.queue_table,
             column_widths=[60, 140, 140, 120, 110, 70, 140, 200, 140],
             stretch_column=7,
+            flexible_columns=[2, 7],
+            fixed_columns=[8],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
         layout.addWidget(self.queue_table, 1)
 
@@ -879,6 +989,8 @@ class MessagesPageWidget(QWidget):
                     act_layout.addWidget(c_btn)
 
                 self.queue_table.setCellWidget(row, 8, act_widget)
+
+            auto_fit_columns(self.queue_table)
 
     def _retry_single_message(self, message_id: int):
         with SessionLocal() as session:
@@ -1022,6 +1134,8 @@ class MessagesPageWidget(QWidget):
             self.compose_students_table.setItem(row, 1, name_item)
 
             self.compose_students_table.setItem(row, 2, QTableWidgetItem(s.admission_number or "—"))
+
+        auto_fit_columns(self.compose_students_table)
 
     def _on_tab_changed(self, index: int):
         if index == 0:

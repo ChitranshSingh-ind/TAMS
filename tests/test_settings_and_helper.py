@@ -249,3 +249,23 @@ def test_coaching_helper_status_file():
     status_file = get_helper_status_file_path()
     assert status_file.parent.exists()
     assert status_file.name == "helper_status.json"
+
+
+def test_settings_dialog_helper_controls(qapp):
+    """Verify that settings dialog helper action triggers execute without NameError (QTimer defined)."""
+    dialog = SettingsDialog()
+
+    with mock.patch("app.ui.settings_dialog.get_helper_process_info", return_value={"running": True, "pid": 9999}):
+        with mock.patch("app.ui.settings_dialog.trigger_helper_queue_cycle") as mock_trigger:
+            with mock.patch("app.ui.settings_dialog.QMessageBox.information"):
+                dialog._on_process_helper_queue_clicked()
+                assert mock_trigger.called
+
+    with mock.patch("app.ui.settings_dialog.start_helper_process"):
+        dialog._on_start_helper_clicked()
+
+    with mock.patch("app.ui.settings_dialog.stop_helper_process"):
+        dialog._on_stop_helper_clicked()
+
+    with mock.patch("app.ui.settings_dialog.restart_helper_process"):
+        dialog._on_restart_helper_clicked()

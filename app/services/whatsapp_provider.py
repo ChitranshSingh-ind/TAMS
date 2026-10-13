@@ -187,6 +187,7 @@ class WhatsAppSendResult:
     error_code: str | None = None
     error_message: str | None = None
     is_retryable: bool = False
+    is_ambiguous: bool = False  # True when network timeout occurred after POST (outcome uncertain)
     http_status: int = 0
     raw_response: dict | None = None
 
@@ -533,6 +534,7 @@ class WhatsAppCloudProvider:
                 error_code="NETWORK_ERROR",
                 error_message=f"Network connection failed or timed out: {reason}",
                 is_retryable=True,
+                is_ambiguous=True,
                 http_status=0,
             )
         except Exception as e:

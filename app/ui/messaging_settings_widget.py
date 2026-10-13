@@ -68,7 +68,7 @@ from app.services.whatsapp_provider import (
     remove_access_token,
     save_access_token,
 )
-from app.ui.table_utils import configure_table_ux
+from app.ui.table_utils import TableSizingStrategy, auto_fit_columns, configure_table_ux
 
 # TAMS Design Palette
 NAVY = "#012D54"
@@ -379,6 +379,18 @@ class MessagingSettingsWidget(QWidget):
         top_row.addWidget(self.env_badge)
         main_layout.addLayout(top_row)
 
+        # Apply global label styles for settings & automation
+        self.setStyleSheet(f"""
+            QFormLayout QLabel, QLabel {{
+                color: {NAVY};
+                font-weight: 600;
+            }}
+            QGroupBox {{
+                font-weight: 700;
+                color: {NAVY};
+            }}
+        """)
+
         # Tabs for Subsections
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet(f"""
@@ -455,7 +467,9 @@ class MessagingSettingsWidget(QWidget):
         self.env_combo.addItem("Development (Meta Test Sender Number)", "DEVELOPMENT")
         self.env_combo.addItem("Production (Sir's Verified WhatsApp Number)", "PRODUCTION")
         self.env_combo.currentIndexChanged.connect(self._on_env_changed)
-        env_layout.addWidget(QLabel("Operating Environment:"))
+        env_lbl = QLabel("Operating Environment:")
+        env_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        env_layout.addWidget(env_lbl)
         env_layout.addWidget(self.env_combo, 1)
 
         layout.addWidget(env_box)
@@ -468,14 +482,20 @@ class MessagingSettingsWidget(QWidget):
 
         self.phone_id_input = QLineEdit()
         self.phone_id_input.setPlaceholderText("e.g. 104829104810294")
-        form.addRow("Phone Number ID:", self.phone_id_input)
+        phone_lbl = QLabel("Phone Number ID:")
+        phone_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(phone_lbl, self.phone_id_input)
 
         self.waba_id_input = QLineEdit()
         self.waba_id_input.setPlaceholderText("e.g. 192840192840192 (WABA ID)")
-        form.addRow("WhatsApp Business Account ID:", self.waba_id_input)
+        waba_lbl = QLabel("WhatsApp Business Account ID:")
+        waba_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(waba_lbl, self.waba_id_input)
 
         self.api_version_input = QLineEdit(DEFAULT_GRAPH_API_VERSION)
-        form.addRow("Graph API Version:", self.api_version_input)
+        api_lbl = QLabel("Graph API Version:")
+        api_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(api_lbl, self.api_version_input)
 
         layout.addWidget(form_box)
 
@@ -488,7 +508,9 @@ class MessagingSettingsWidget(QWidget):
         token_row = QHBoxLayout()
         self.token_display_lbl = QLabel("Not Configured")
         self.token_display_lbl.setStyleSheet("font-family: monospace; font-size: 13px; color: #15803D; font-weight: 600;")
-        token_row.addWidget(QLabel("Active Token:"))
+        token_lbl = QLabel("Active Token:")
+        token_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        token_row.addWidget(token_lbl)
         token_row.addWidget(self.token_display_lbl, 1)
 
         self.replace_token_btn = QPushButton("Replace Token")
@@ -528,6 +550,7 @@ class MessagingSettingsWidget(QWidget):
 
         top_bar = QHBoxLayout()
         search_lbl = QLabel("Search:")
+        search_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
         self.template_search = QLineEdit()
         self.template_search.setPlaceholderText("Filter templates by name or trigger...")
         self.template_search.textChanged.connect(self._filter_templates)
@@ -549,7 +572,9 @@ class MessagingSettingsWidget(QWidget):
         configure_table_ux(
             self.templates_table,
             column_widths=[160, 160, 100, 130, 110, 70, 90],
-            stretch_column=0,
+            flexible_columns=[0, 1],
+            fixed_columns=[5, 6],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
         layout.addWidget(self.templates_table, 1)
 
@@ -568,7 +593,7 @@ class MessagingSettingsWidget(QWidget):
             "Built-in cooldowns prevent duplicate messages upon restarts or multiple actions."
         )
         info_lbl.setWordWrap(True)
-        info_lbl.setStyleSheet(f"background-color: {CREAM}; padding: 10px; border: 1px solid {LIGHT_GOLD}; border-radius: 6px; font-size: 12px;")
+        info_lbl.setStyleSheet(f"background-color: {CREAM}; padding: 10px; border: 1px solid {LIGHT_GOLD}; border-radius: 6px; font-size: 12px; color: {NAVY};")
         layout.addWidget(info_lbl)
 
         self.rules_table = QTableWidget()
@@ -579,7 +604,8 @@ class MessagingSettingsWidget(QWidget):
         configure_table_ux(
             self.rules_table,
             column_widths=[220, 140, 100, 90, 80, 180],
-            stretch_column=0,
+            flexible_columns=[0, 5],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
         layout.addWidget(self.rules_table, 1)
 
@@ -598,29 +624,39 @@ class MessagingSettingsWidget(QWidget):
         form.setSpacing(12)
 
         self.queue_enabled_cb = QCheckBox("Enable background message queue processing")
-        form.addRow("Queue Active:", self.queue_enabled_cb)
+        q_act_lbl = QLabel("Queue Active:")
+        q_act_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(q_act_lbl, self.queue_enabled_cb)
 
         self.retry_limit_spin = QSpinBox()
         self.retry_limit_spin.setRange(1, 10)
         self.retry_limit_spin.setValue(3)
-        form.addRow("Max Retry Attempts:", self.retry_limit_spin)
+        ret_lbl = QLabel("Max Retry Attempts:")
+        ret_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(ret_lbl, self.retry_limit_spin)
 
         self.backoff_base_spin = QSpinBox()
         self.backoff_base_spin.setRange(10, 600)
         self.backoff_base_spin.setValue(60)
         self.backoff_base_spin.setSuffix(" seconds")
-        form.addRow("Exponential Backoff Base:", self.backoff_base_spin)
+        bo_lbl = QLabel("Exponential Backoff Base:")
+        bo_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(bo_lbl, self.backoff_base_spin)
 
         self.polling_interval_spin = QSpinBox()
         self.polling_interval_spin.setRange(5, 120)
         self.polling_interval_spin.setValue(15)
         self.polling_interval_spin.setSuffix(" seconds")
-        form.addRow("Worker Polling Interval:", self.polling_interval_spin)
+        poll_lbl = QLabel("Worker Polling Interval:")
+        poll_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(poll_lbl, self.polling_interval_spin)
 
         self.max_bulk_spin = QSpinBox()
         self.max_bulk_spin.setRange(10, 500)
         self.max_bulk_spin.setValue(100)
-        form.addRow("Max Bulk Send Size:", self.max_bulk_spin)
+        bulk_lbl = QLabel("Max Bulk Send Size:")
+        bulk_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        form.addRow(bulk_lbl, self.max_bulk_spin)
 
         layout.addWidget(form_box)
 
@@ -631,13 +667,19 @@ class MessagingSettingsWidget(QWidget):
         q_layout.setSpacing(10)
 
         self.quiet_hours_cb = QCheckBox("Pause sending during quiet hours")
-        q_layout.addRow("Quiet Hours:", self.quiet_hours_cb)
+        qh_lbl = QLabel("Quiet Hours:")
+        qh_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        q_layout.addRow(qh_lbl, self.quiet_hours_cb)
 
         self.quiet_start_edit = QTimeEdit(QTime(22, 0))
-        q_layout.addRow("Start Time:", self.quiet_start_edit)
+        st_lbl = QLabel("Start Time:")
+        st_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        q_layout.addRow(st_lbl, self.quiet_start_edit)
 
         self.quiet_end_edit = QTimeEdit(QTime(7, 0))
-        q_layout.addRow("End Time:", self.quiet_end_edit)
+        et_lbl = QLabel("End Time:")
+        et_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
+        q_layout.addRow(et_lbl, self.quiet_end_edit)
 
         layout.addWidget(quiet_box)
         layout.addStretch()
@@ -877,6 +919,7 @@ class MessagingSettingsWidget(QWidget):
             edit_btn.setStyleSheet(f"background-color: {CREAM}; color: {NAVY}; border: 1px solid {LIGHT_GOLD}; font-size: 11px; border-radius: 4px;")
             edit_btn.clicked.connect(lambda checked=False, tid=t.id: self._edit_template(tid))
             self.templates_table.setCellWidget(row, 6, edit_btn)
+        auto_fit_columns(self.templates_table)
 
     def _on_add_template(self):
         dlg = TemplateEditDialog(None, self)
@@ -919,6 +962,7 @@ class MessagingSettingsWidget(QWidget):
 
             tmpl_name = tmpls.get(r.template_id, "—")
             self.rules_table.setItem(row, 5, QTableWidgetItem(tmpl_name))
+        auto_fit_columns(self.rules_table)
 
     # ── DIAGNOSTICS REFRESH ───────────────────────────────────────────────────
     def _refresh_diagnostics(self):

@@ -118,7 +118,14 @@ from app.ui.chart_widgets import (
 )
 from app.ui.messages_page_widget import MessagesPageWidget
 from app.services.coaching_helper import CoachingHelper
-from app.ui.table_utils import configure_table_ux, save_table_state, restore_table_state, TAMSItemDelegate
+from app.ui.table_utils import (
+    TableSizingStrategy,
+    TAMSItemDelegate,
+    auto_fit_columns,
+    configure_table_ux,
+    restore_table_state,
+    save_table_state,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -1027,7 +1034,7 @@ class MainWindow(QMainWindow):
             }}
 
             /* ── Teaching Page ── */
-            #teachingPage {{
+            #teachingPage, #messagesPage {{
                 background: {CREAM};
             }}
             #teachingPageTitle {{
@@ -1633,6 +1640,8 @@ class MainWindow(QMainWindow):
             self.results_tests_table,
             column_widths=[240, 160, 140, 130],
             stretch_column=0,
+            flexible_columns=[0],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
 
         layout.addWidget(self.results_tests_table)
@@ -1695,6 +1704,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "results_empty_label"):
             self.results_empty_label.setVisible(len(rows) == 0)
 
+        auto_fit_columns(self.results_tests_table)
         self.update_check_results_button()
 
     def update_check_results_button(self):
@@ -1799,8 +1809,11 @@ class MainWindow(QMainWindow):
         results_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
         )
-        results_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
+        configure_table_ux(
+            results_table,
+            column_widths=[140, 200, 100, 120, 220],
+            flexible_columns=[1, 4],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
 
         for row_index, values in enumerate(rows):
@@ -1816,6 +1829,7 @@ class MainWindow(QMainWindow):
                     item,
                 )
 
+        auto_fit_columns(results_table)
         layout.addWidget(results_table)
 
         if not rows:
@@ -1920,9 +1934,11 @@ class MainWindow(QMainWindow):
             ["Admission No.", "Student", "Status", "Marks", "Remarks"]
         )
         results_table.setRowCount(len(student_rows))
-        results_table.verticalHeader().setVisible(False)
-        results_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
+        configure_table_ux(
+            results_table,
+            column_widths=[140, 200, 110, 110, 220],
+            flexible_columns=[1, 4],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
 
         for row_index, values in enumerate(student_rows):
@@ -1982,6 +1998,7 @@ class MainWindow(QMainWindow):
             results_table.setItem(row_index, 3, marks_item)
             results_table.setItem(row_index, 4, remarks_item)
 
+        auto_fit_columns(results_table)
         layout.addWidget(results_table)
 
         buttons = QDialogButtonBox(
@@ -2386,8 +2403,11 @@ class MainWindow(QMainWindow):
         self.fees_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         configure_table_ux(
             self.fees_table,
-            column_widths=[120, 170, 130, 120, 110, 110, 110, 110, 100, 120],
+            column_widths=[130, 180, 140, 120, 110, 110, 110, 110, 110, 180],
             stretch_column=1,
+            flexible_columns=[1, 2],
+            fixed_columns=[9],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
 
         layout.addWidget(self.fees_table, 1)
@@ -2589,6 +2609,7 @@ class MainWindow(QMainWindow):
             self.fees_table.setCellWidget(row, 9, action_widget)
 
         self.fees_empty_label.setVisible(len(fees) == 0)
+        auto_fit_columns(self.fees_table)
 
     def export_fees_csv(self):
         default_filename = f"fees_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -2937,8 +2958,11 @@ class MainWindow(QMainWindow):
         self.expenses_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         configure_table_ux(
             self.expenses_table,
-            column_widths=[110, 200, 130, 150, 110, 110, 110, 110, 100, 120],
+            column_widths=[120, 240, 140, 160, 110, 110, 110, 110, 110, 235],
             stretch_column=1,
+            flexible_columns=[1, 3],
+            fixed_columns=[9],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
 
         layout.addWidget(self.expenses_table, 1)
@@ -3151,6 +3175,7 @@ class MainWindow(QMainWindow):
             self.expenses_table.setCellWidget(row, 9, action_widget)
 
         self.expenses_empty_label.setVisible(len(expenses) == 0)
+        auto_fit_columns(self.expenses_table)
 
     def reset_expense_filters(self):
         if not hasattr(self, "expense_search_input"):
@@ -3525,11 +3550,13 @@ class MainWindow(QMainWindow):
         self.analysis_risk_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.analysis_risk_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.analysis_risk_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.analysis_risk_table.setMinimumHeight(240)
+        self.analysis_risk_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         configure_table_ux(
             self.analysis_risk_table,
-            column_widths=[160, 130, 120, 220, 110, 110, 220, 100],
-            stretch_column=3,
+            column_widths=[220, 160, 140, 300, 130, 130, 300, 120],
+            flexible_columns=[0, 3, 6],
+            fixed_columns=[7],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
         layout.addWidget(self.analysis_risk_table)
 
@@ -3555,10 +3582,13 @@ class MainWindow(QMainWindow):
         self.analysis_trajectory_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.analysis_trajectory_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.analysis_trajectory_table.setMinimumHeight(200)
+        self.analysis_trajectory_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         configure_table_ux(
             self.analysis_trajectory_table,
-            column_widths=[160, 130, 110, 120, 120, 120, 120, 100],
-            stretch_column=0,
+            column_widths=[220, 160, 130, 150, 150, 140, 140, 120],
+            flexible_columns=[0, 1],
+            fixed_columns=[7],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
         layout.addWidget(self.analysis_trajectory_table)
 
@@ -3704,10 +3734,13 @@ class MainWindow(QMainWindow):
         self.analysis_student_perf_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.analysis_student_perf_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.analysis_student_perf_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.analysis_student_perf_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         configure_table_ux(
             self.analysis_student_perf_table,
-            column_widths=[110, 160, 120, 90, 80, 80, 80, 80, 80, 90, 90, 90],
-            stretch_column=1,
+            column_widths=[140, 240, 160, 130, 120, 120, 120, 120, 120, 130, 130, 130],
+            flexible_columns=[1, 2],
+            fixed_columns=[11],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
 
         layout.addWidget(self.analysis_student_perf_table, 1)
@@ -3750,10 +3783,12 @@ class MainWindow(QMainWindow):
         self.analysis_batch_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.analysis_batch_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.analysis_batch_table.setMinimumHeight(180)
+        self.analysis_batch_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         configure_table_ux(
             self.analysis_batch_table,
-            column_widths=[180, 120, 120, 130, 140, 130, 130],
-            stretch_column=0,
+            column_widths=[240, 150, 150, 160, 180, 160, 160],
+            flexible_columns=[0],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
         layout.addWidget(self.analysis_batch_table)
 
@@ -3780,10 +3815,12 @@ class MainWindow(QMainWindow):
         self.analysis_tests_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.analysis_tests_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.analysis_tests_table.setMinimumHeight(220)
+        self.analysis_tests_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         configure_table_ux(
             self.analysis_tests_table,
-            column_widths=[180, 130, 110, 100, 140, 110, 90, 90, 130],
-            stretch_column=0,
+            column_widths=[260, 160, 130, 120, 180, 140, 120, 120, 170],
+            flexible_columns=[0, 1],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
         )
         layout.addWidget(self.analysis_tests_table)
 
@@ -3845,11 +3882,14 @@ class MainWindow(QMainWindow):
         self.analysis_attendance_alert_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.analysis_attendance_alert_table.verticalHeader().setVisible(False)
         self.analysis_attendance_alert_table.verticalHeader().setDefaultSectionSize(40)
+        self.analysis_attendance_alert_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         configure_table_ux(
             self.analysis_attendance_alert_table,
-            column_widths=[200, 140, 120, 100, 100, 150, 120],
-            stretch_column=0,
-            alternating_colors=True
+            column_widths=[260, 170, 140, 130, 130, 180, 140],
+            flexible_columns=[0, 1],
+            fixed_columns=[6],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            alternating_colors=True,
         )
         layout.addWidget(self.analysis_attendance_alert_table)
 
@@ -3874,11 +3914,13 @@ class MainWindow(QMainWindow):
         self.analysis_syllabus_table.verticalHeader().setVisible(False)
         self.analysis_syllabus_table.verticalHeader().setDefaultSectionSize(40)
         self.analysis_syllabus_table.setMinimumHeight(180)
+        self.analysis_syllabus_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         configure_table_ux(
             self.analysis_syllabus_table,
-            column_widths=[260, 130, 130, 130, 140],
-            stretch_column=0,
-            alternating_colors=True
+            column_widths=[320, 160, 150, 150, 170],
+            flexible_columns=[0],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            alternating_colors=True,
         )
         layout.addWidget(self.analysis_syllabus_table)
 
@@ -3982,12 +4024,15 @@ class MainWindow(QMainWindow):
         self.analysis_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.analysis_table.verticalHeader().setVisible(False)
         self.analysis_table.verticalHeader().setDefaultSectionSize(42)
+        self.analysis_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         configure_table_ux(
             self.analysis_table,
-            column_widths=[140, 160, 160, 150, 150, 150, 150],
+            column_widths=[160, 200, 200, 180, 180, 180, 180],
             stretch_column=None,
-            alternating_colors=True
+            flexible_columns=[0, 1, 2, 3, 4, 5, 6],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
+            alternating_colors=True,
         )
 
         layout.addWidget(self.analysis_table, 1)
@@ -4099,6 +4144,8 @@ class MainWindow(QMainWindow):
             nam_item.setForeground(Qt.GlobalColor.blue if nam >= 0 else Qt.GlobalColor.darkRed)
             self.analysis_table.setItem(row, 6, nam_item)
 
+        auto_fit_columns(self.analysis_table)
+
     def _load_analysis_risk(self, risk_data, trajectory_data):
         high_cnt = sum(1 for r in risk_data if r["risk_level"] == "High Attention")
         mod_cnt = sum(1 for r in risk_data if r["risk_level"] == "Needs Attention")
@@ -4150,6 +4197,8 @@ class MainWindow(QMainWindow):
             )
             self.analysis_trajectory_table.setCellWidget(row, 6, self._create_badge_widget(trend_name, bg, fg))
             self.analysis_trajectory_table.setCellWidget(row, 7, self._create_action_btn_widget(t["student_id"]))
+
+        auto_fit_columns(self.analysis_trajectory_table)
 
     def _filter_risk_table(self):
         if not hasattr(self, "_cached_risk_data"):
@@ -4215,6 +4264,8 @@ class MainWindow(QMainWindow):
             self.analysis_risk_table.setItem(row, 6, rec_item)
 
             self.analysis_risk_table.setCellWidget(row, 7, self._create_action_btn_widget(r["student_id"]))
+
+        auto_fit_columns(self.analysis_risk_table)
 
     def _load_analysis_overview(self, overview_data, batches_data, tests_data=None):
         self.overview_kpi_active_students.setText(str(overview_data.get("active_students", 0)))
@@ -4388,6 +4439,8 @@ class MainWindow(QMainWindow):
             self.analysis_student_perf_table.setCellWidget(row, 10, self._create_badge_widget(tr, bg, fg))
             self.analysis_student_perf_table.setCellWidget(row, 11, self._create_action_btn_widget(p["student_id"]))
 
+        auto_fit_columns(self.analysis_student_perf_table)
+
     def _load_analysis_batches_tests(self, batches_data, tests_data):
         # Batch Comparison Table
         self.analysis_batch_table.setRowCount(len(batches_data))
@@ -4417,6 +4470,8 @@ class MainWindow(QMainWindow):
             rel_text = "Adequate Data" if b["reliable_sample"] else "Low Data Sample"
             rel_bg, rel_fg = ("#DCFCE7", "#15803D") if b["reliable_sample"] else ("#FEF3C7", "#B45309")
             self.analysis_batch_table.setCellWidget(row, 6, self._create_badge_widget(rel_text, rel_bg, rel_fg))
+
+        auto_fit_columns(self.analysis_batch_table)
 
         # Tests Table
         test_list = tests_data.get("tests", [])
@@ -4458,6 +4513,8 @@ class MainWindow(QMainWindow):
             st_badge = "Strong (≥65%)" if t["avg_pct"] >= 65 else ("Satisfactory (50-64%)" if t["avg_pct"] >= 50 else "Needs Review (<50%)")
             st_bg, st_fg = ("#DCFCE7", "#15803D") if t["avg_pct"] >= 65 else (("#DBEAFE", "#1D4ED8") if t["avg_pct"] >= 50 else ("#FEE2E2", "#B91C1C"))
             self.analysis_tests_table.setCellWidget(row, 8, self._create_badge_widget(st_badge, st_bg, st_fg))
+
+        auto_fit_columns(self.analysis_tests_table)
 
     def _load_analysis_attendance_teaching(self, att_data, teach_data):
         # Attendance bands
@@ -4533,6 +4590,9 @@ class MainWindow(QMainWindow):
             pct_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             pct_item.setForeground(Qt.GlobalColor.darkGreen if cp >= 100 else (Qt.GlobalColor.blue if cp >= 50 else Qt.GlobalColor.black))
             self.analysis_syllabus_table.setItem(row, 4, pct_item)
+
+        auto_fit_columns(self.analysis_attendance_alert_table)
+        auto_fit_columns(self.analysis_syllabus_table)
 
     # ─────────────────────────────────────────────────────────────────────────
     # ── UI HELPERS & EXPORT ──────────────────────────────────────────────────
@@ -4823,46 +4883,14 @@ class MainWindow(QMainWindow):
         self.lessons_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.lessons_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.lessons_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.lessons_table.verticalHeader().setVisible(False)
-        self.lessons_table.verticalHeader().setDefaultSectionSize(48)
-        self.lessons_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.lessons_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.lessons_table.setAlternatingRowColors(True)
-        self.lessons_table.setStyleSheet("""
-            QTableWidget {
-                background: #FEFEFE;
-                alternate-background-color: #F8F6EA;
-                border: none;
-                gridline-color: #F1EBD3;
-                font-size: 13px;
-                color: #1F2937;
-                selection-background-color: #E9DEBA;
-                selection-color: #012D54;
-            }
-            QTableWidget::item { padding: 6px 8px; border-bottom: 1px solid #F1EBD3; }
-            QHeaderView::section {
-                background: #012D54;
-                color: #FEFEFE;
-                padding: 9px 8px;
-                border: none;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
-        h = self.lessons_table.horizontalHeader()
-        h.setStretchLastSection(False)
-        for c in range(8):
-            h.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
-        self.lessons_table.setColumnWidth(0, 120)  # Date
-        self.lessons_table.setColumnWidth(1, 240)  # Title
-        self.lessons_table.setColumnWidth(2, 170)  # Chapter
-        self.lessons_table.setColumnWidth(3, 190)  # Topic
-        self.lessons_table.setColumnWidth(4, 110)  # Duration
-        self.lessons_table.setColumnWidth(5, 130)  # Status
-        self.lessons_table.setColumnWidth(6, 150)  # Batch
-        self.lessons_table.setColumnWidth(7, 230)  # Actions
-        self.lessons_table.setItemDelegate(TAMSItemDelegate(self.lessons_table))
-
+        configure_table_ux(
+            self.lessons_table,
+            column_widths=[120, 240, 170, 190, 110, 130, 150, 220],
+            flexible_columns=[1, 3],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
+            default_row_height=48,
+            alternating_colors=True,
+        )
         tab_lessons_layout.addWidget(self.lessons_table)
 
         self.lessons_empty_label = QLabel("No lessons match the current filters. Click '＋ Plan Lesson' to create one.")
@@ -4894,45 +4922,14 @@ class MainWindow(QMainWindow):
         self.class_records_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.class_records_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.class_records_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.class_records_table.verticalHeader().setVisible(False)
-        self.class_records_table.verticalHeader().setDefaultSectionSize(48)
-        self.class_records_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.class_records_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.class_records_table.setAlternatingRowColors(True)
-        self.class_records_table.setStyleSheet("""
-            QTableWidget {
-                background: #FEFEFE;
-                alternate-background-color: #F8F6EA;
-                border: none;
-                gridline-color: #F1EBD3;
-                font-size: 13px;
-                color: #1F2937;
-                selection-background-color: #E9DEBA;
-                selection-color: #012D54;
-            }
-            QTableWidget::item { padding: 6px 8px; border-bottom: 1px solid #F1EBD3; }
-            QHeaderView::section {
-                background: #012D54;
-                color: #FEFEFE;
-                padding: 9px 8px;
-                border: none;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
-        h2 = self.class_records_table.horizontalHeader()
-        h2.setStretchLastSection(False)
-        for c in range(7):
-            h2.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
-        self.class_records_table.setColumnWidth(0, 120)  # Date
-        self.class_records_table.setColumnWidth(1, 150)  # Batch
-        self.class_records_table.setColumnWidth(2, 170)  # Chapter
-        self.class_records_table.setColumnWidth(3, 220)  # Topic Taught
-        self.class_records_table.setColumnWidth(4, 200)  # Topics Completed
-        self.class_records_table.setColumnWidth(5, 230)  # Notes
-        self.class_records_table.setColumnWidth(6, 120)  # Actions
-        self.class_records_table.setItemDelegate(TAMSItemDelegate(self.class_records_table))
-
+        configure_table_ux(
+            self.class_records_table,
+            column_widths=[120, 150, 170, 220, 180, 220, 140],
+            flexible_columns=[2, 3, 5],
+            strategy=TableSizingStrategy.WIDE_SCROLLABLE,
+            default_row_height=48,
+            alternating_colors=True,
+        )
         tab_history_layout.addWidget(self.class_records_table)
 
         self.class_records_empty_label = QLabel("No class sessions recorded yet. Click '📝 Record Class' to add one.")
@@ -4964,44 +4961,14 @@ class MainWindow(QMainWindow):
         self.homework_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.homework_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.homework_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.homework_table.verticalHeader().setVisible(False)
-        self.homework_table.verticalHeader().setDefaultSectionSize(48)
-        self.homework_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.homework_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.homework_table.setAlternatingRowColors(True)
-        self.homework_table.setStyleSheet("""
-            QTableWidget {
-                background: #FEFEFE;
-                alternate-background-color: #F8F6EA;
-                border: none;
-                gridline-color: #F1EBD3;
-                font-size: 13px;
-                color: #1F2937;
-                selection-background-color: #E9DEBA;
-                selection-color: #012D54;
-            }
-            QTableWidget::item { padding: 6px 8px; border-bottom: 1px solid #F1EBD3; }
-            QHeaderView::section {
-                background: #012D54;
-                color: #FEFEFE;
-                padding: 9px 8px;
-                border: none;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
-        h3 = self.homework_table.horizontalHeader()
-        h3.setStretchLastSection(False)
-        for c in range(6):
-            h3.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
-        self.homework_table.setColumnWidth(0, 240)  # Title
-        self.homework_table.setColumnWidth(1, 150)  # Batch
-        self.homework_table.setColumnWidth(2, 120)  # Assigned
-        self.homework_table.setColumnWidth(3, 120)  # Due
-        self.homework_table.setColumnWidth(4, 130)  # Status
-        self.homework_table.setColumnWidth(5, 120)  # Actions
-        self.homework_table.setItemDelegate(TAMSItemDelegate(self.homework_table))
-
+        configure_table_ux(
+            self.homework_table,
+            column_widths=[240, 150, 120, 120, 130, 140],
+            flexible_columns=[0],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            default_row_height=48,
+            alternating_colors=True,
+        )
         tab_hw_layout.addWidget(self.homework_table)
 
         self.homework_empty_label = QLabel("No homework assigned yet. Click '＋ Add Homework' to create one.")
@@ -5033,43 +5000,14 @@ class MainWindow(QMainWindow):
         self.progress_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.progress_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.progress_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.progress_table.verticalHeader().setVisible(False)
-        self.progress_table.verticalHeader().setDefaultSectionSize(44)
-        self.progress_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.progress_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.progress_table.setAlternatingRowColors(True)
-        self.progress_table.setStyleSheet("""
-            QTableWidget {
-                background: #FEFEFE;
-                alternate-background-color: #F8F6EA;
-                border: none;
-                gridline-color: #F1EBD3;
-                font-size: 13px;
-                color: #1F2937;
-                selection-background-color: #E9DEBA;
-                selection-color: #012D54;
-            }
-            QTableWidget::item { padding: 6px 8px; border-bottom: 1px solid #F1EBD3; }
-            QHeaderView::section {
-                background: #012D54;
-                color: #FEFEFE;
-                padding: 9px 8px;
-                border: none;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
-        h4 = self.progress_table.horizontalHeader()
-        h4.setStretchLastSection(False)
-        for c in range(5):
-            h4.setSectionResizeMode(c, QHeaderView.ResizeMode.Interactive)
-        self.progress_table.setColumnWidth(0, 260)  # Chapter
-        self.progress_table.setColumnWidth(1, 140)  # Total Lessons
-        self.progress_table.setColumnWidth(2, 130)  # Completed
-        self.progress_table.setColumnWidth(3, 130)  # Cancelled
-        self.progress_table.setColumnWidth(4, 140)  # Progress
-        self.progress_table.setItemDelegate(TAMSItemDelegate(self.progress_table))
-
+        configure_table_ux(
+            self.progress_table,
+            column_widths=[260, 140, 130, 130, 150],
+            flexible_columns=[0],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            default_row_height=44,
+            alternating_colors=True,
+        )
         tab_progress_layout.addWidget(self.progress_table)
 
         self.progress_empty_label = QLabel("No chapter data. Plan lessons with chapter names to see progress.")
@@ -5340,6 +5278,11 @@ class MainWindow(QMainWindow):
         self.progress_empty_label.setVisible(len(chapters) == 0)
         self.progress_table.setVisible(len(chapters) > 0)
 
+        auto_fit_columns(self.lessons_table)
+        auto_fit_columns(self.class_records_table)
+        auto_fit_columns(self.homework_table)
+        auto_fit_columns(self.progress_table)
+
     # ── Filter reset ──────────────────────────────────────────────────────
 
     def reset_teaching_filters(self):
@@ -5566,8 +5509,11 @@ class MainWindow(QMainWindow):
         )
         configure_table_ux(
             self.students_table,
-            column_widths=[120, 170, 150, 130, 140, 100, 110],
+            column_widths=[130, 200, 170, 130, 140, 100, 160],
             stretch_column=1,
+            flexible_columns=[1, 2],
+            fixed_columns=[6],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
 
         self.students_table.setRowCount(0)
@@ -5752,6 +5698,8 @@ class MainWindow(QMainWindow):
                 self.student_count_badge.setText(
                     f"Showing {visible_count} of {total_rows} students"
                 )
+
+        auto_fit_columns(self.students_table)
 
     def refresh_dashboard(self):
         batch_id = self.batch_selector.currentData()
@@ -6405,7 +6353,9 @@ class MainWindow(QMainWindow):
             results_table,
             column_widths=[200, 120, 120, 120, 200],
             stretch_column=0,
-            alternating_colors=True
+            flexible_columns=[0, 4],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            alternating_colors=True,
         )
 
         results_layout.addWidget(results_table)
@@ -6502,7 +6452,9 @@ class MainWindow(QMainWindow):
             attendance_table,
             column_widths=[180, 180],
             stretch_column=0,
-            alternating_colors=True
+            flexible_columns=[0, 1],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            alternating_colors=True,
         )
 
         attendance_layout.addWidget(attendance_table)
@@ -6632,9 +6584,12 @@ class MainWindow(QMainWindow):
         student_fees_table.verticalHeader().setVisible(False)
         configure_table_ux(
             student_fees_table,
-            column_widths=[140, 110, 110, 110, 110, 110, 120],
+            column_widths=[140, 110, 110, 110, 110, 110, 140],
             stretch_column=0,
-            alternating_colors=True
+            flexible_columns=[0],
+            fixed_columns=[6],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            alternating_colors=True,
         )
         fees_layout.addWidget(student_fees_table, 1)
 
@@ -6798,6 +6753,9 @@ class MainWindow(QMainWindow):
             s_item = QTableWidgetItem(record.status)
             s_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             attendance_table.setItem(row, 1, s_item)
+
+        auto_fit_columns(attendance_table)
+
     def load_student_results(
         self,
         student_id,
@@ -6872,6 +6830,8 @@ class MainWindow(QMainWindow):
             rem_item = QTableWidgetItem(result.remarks or "")
             rem_item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
             results_table.setItem(row, 4, rem_item)
+
+        auto_fit_columns(results_table)
     def load_student_fee_summary(
         self,
         student_id,
@@ -6992,6 +6952,8 @@ class MainWindow(QMainWindow):
                 act_l.addWidget(hist_b)
 
                 table.setCellWidget(row, 6, act_w)
+
+            auto_fit_columns(table)
     def create_attendance_page(self):
         page = QWidget()
         page.setObjectName("attendancePage")
@@ -7150,7 +7112,10 @@ class MainWindow(QMainWindow):
             attendance_table,
             column_widths=[140, 260, 70, 70],
             stretch_column=1,
-            alternating_colors=True
+            flexible_columns=[1],
+            fixed_columns=[2, 3],
+            strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
+            alternating_colors=True,
         )
 
         layout.addWidget(attendance_table)
@@ -7500,6 +7465,7 @@ class MainWindow(QMainWindow):
             f"Absent: {absent_count}  |  "
             f"Total: {total_count}"
         )
+        auto_fit_columns(self.attendance_table)
 
     def set_all_attendance(self, status):
         if not hasattr(self, "attendance_row_callbacks") or not self.attendance_row_callbacks:

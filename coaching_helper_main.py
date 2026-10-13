@@ -2,7 +2,8 @@
 Standalone CoachingHelper Companion Application for TAMS.
 Entry point for running the background helper on Windows and Linux.
 Provides system tray notifications, pause/resume controls,
-background queue processing, automated SQLite backups, and single-instance protection.
+background queue processing, automated SQLite backups, IPC control,
+and single-instance protection. All queue operations are executed in a background QThread.
 
 Usage:
   python coaching_helper_main.py             # Runs with System Tray (if available)
@@ -17,15 +18,8 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
-
-# Setup basic logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger("TAMS.CoachingHelper")
 
 # Ensure repository root is in python path
 ROOT_DIR = Path(__file__).resolve().parent
@@ -39,7 +33,12 @@ from app.services.coaching_helper_service import (
     CoachingHelperEngine,
     check_for_updates,
     is_helper_process_running,
+    setup_helper_logging,
 )
+
+# Initialize bounded rotating logging
+setup_helper_logging()
+logger = logging.getLogger("TAMS.CoachingHelper")
 
 
 def run_headless():
@@ -71,9 +70,9 @@ def run_headless():
 
 
 def run_tray():
-    """Runs CoachingHelper with a Windows/Desktop System Tray icon."""
+    """Runs CoachingHelper with a Windows/Desktop System Tray icon and non-blocking worker thread."""
     try:
-        from PyQt6.QtCore import QTimer
+        from PyQt6.QtCore import QMutex, QObject, QThread, QTimer, pyqtSignal, pyqtSlot
         from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
         from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
     except ImportError:
@@ -81,7 +80,6 @@ def run_tray():
         run_headless()
         return
 
-    # Check if display / tray is supported
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
@@ -102,7 +100,49 @@ def run_tray():
         )
         sys.exit(0)
 
-    # Create tray icon
+    # ─────────────────────────────────────────────────────────────────────────
+    # Non-blocking Worker Thread for Queue Processing Cycles
+    # ─────────────────────────────────────────────────────────────────────────
+    class HelperWorkerThread(QThread):
+        cycle_done = pyqtSignal(dict, bool)  # (result_dict, is_manual_trigger)
+        status_updated = pyqtSignal(str, bool)  # (status_text, is_online)
+
+        def __init__(self, engine_instance: CoachingHelperEngine, parent: QObject | None = None):
+            super().__init__(parent)
+            self.engine = engine_instance
+            self._pending_manual = False
+            self._running = True
+
+        def trigger_cycle(self, manual: bool = False):
+            if manual:
+                self._pending_manual = True
+            if not self.isRunning():
+                self.start()
+
+        def stop(self):
+            self._running = False
+            self.wait(3000)
+
+        def run(self):
+            manual = self._pending_manual
+            self._pending_manual = False
+
+            # Check IPC commands first
+            self.engine.check_and_handle_ipc_commands()
+            if not self.engine.is_running:
+                return
+
+            res = self.engine.run_single_cycle()
+            st = res.get("status", "RUNNING")
+            online = self.engine.last_online_status
+            self.status_updated.emit(st, online)
+            self.cycle_done.emit(res, manual)
+
+    worker = HelperWorkerThread(engine)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tray Icon & Visuals
+    # ─────────────────────────────────────────────────────────────────────────
     tray_icon = QSystemTrayIcon()
 
     def make_icon(color_hex="#012D54"):
@@ -124,7 +164,6 @@ def run_tray():
     # Tray Menu
     menu = QMenu()
 
-    # Title header
     title_action = QAction(f"TAMS CoachingHelper v{APP_VERSION}", menu)
     title_action.setEnabled(False)
     menu.addAction(title_action)
@@ -135,20 +174,13 @@ def run_tray():
 
     menu.addSeparator()
 
-    # Process Now action
-    def trigger_immediate_process():
-        res = engine.run_single_cycle()
-        summary = res.get("summary", {})
-        processed = summary.get("processed", 0)
-        tray_icon.showMessage(
-            "TAMS Queue Processed",
-            f"Processed {processed} messages. Accepted: {summary.get('accepted', 0)}, Failed: {summary.get('failed', 0)}",
-            QSystemTrayIcon.MessageIcon.Information,
-            3000,
-        )
+    # Manual process queue action
+    def on_manual_process_clicked():
+        status_action.setText("Status: Processing queue...")
+        worker.trigger_cycle(manual=True)
 
     process_now_action = QAction("⚡ Process Queue Now", menu)
-    process_now_action.triggered.connect(trigger_immediate_process)
+    process_now_action.triggered.connect(on_manual_process_clicked)
     menu.addAction(process_now_action)
 
     # Pause / Resume action
@@ -159,18 +191,28 @@ def run_tray():
             engine.resume()
             pause_action.setText("⏸ Pause Processing")
             tray_icon.setIcon(make_icon("#012D54"))
+            status_action.setText("Status: RUNNING")
         else:
             engine.pause()
             pause_action.setText("▶ Resume Processing")
             tray_icon.setIcon(make_icon("#615F4B"))
+            status_action.setText("Status: PAUSED")
 
     pause_action.triggered.connect(toggle_pause)
     menu.addAction(pause_action)
 
-    # Backup action
-    def trigger_backup():
-        res = create_database_backup(custom_label="tray_manual", max_retention=10)
-        if res["success"]:
+    # Backup action (in background)
+    class BackupWorkerThread(QThread):
+        backup_done = pyqtSignal(dict)
+
+        def run(self):
+            res = create_database_backup(custom_label="tray_manual", max_retention=10)
+            self.backup_done.emit(res)
+
+    backup_worker = BackupWorkerThread()
+
+    def on_backup_done(res):
+        if res.get("success"):
             tray_icon.showMessage(
                 "Backup Successful",
                 f"Saved to {res.get('backup_filename')}",
@@ -185,31 +227,49 @@ def run_tray():
                 4000,
             )
 
+    backup_worker.backup_done.connect(on_backup_done)
+
     backup_action = QAction("📦 Create Database Backup Now", menu)
-    backup_action.triggered.connect(trigger_backup)
+    backup_action.triggered.connect(backup_worker.start)
     menu.addAction(backup_action)
 
-    # Update check action
-    def trigger_update_check():
-        info = check_for_updates()
+    # Update check action (non-blocking)
+    class UpdateWorkerThread(QThread):
+        update_done = pyqtSignal(dict)
+
+        def run(self):
+            res = check_for_updates()
+            self.update_done.emit(res)
+
+    update_worker = UpdateWorkerThread()
+
+    def on_update_done(info):
+        is_newer = not info.get("is_up_to_date", True)
         tray_icon.showMessage(
             "TAMS Version Check",
-            f"Current: v{info['current_version']} (Up to date)",
-            QSystemTrayIcon.MessageIcon.Information,
-            3000,
+            f"Latest: v{info.get('latest_version')} — {info.get('message')}",
+            QSystemTrayIcon.MessageIcon.Information if not is_newer else QSystemTrayIcon.MessageIcon.Warning,
+            4000,
         )
 
+    update_worker.update_done.connect(on_update_done)
+
     update_action = QAction("🔄 Check for Updates", menu)
-    update_action.triggered.connect(trigger_update_check)
+    update_action.triggered.connect(update_worker.start)
     menu.addAction(update_action)
 
     menu.addSeparator()
 
     # Open TAMS GUI
     def open_main_app():
-        main_script = ROOT_DIR / "main.py"
+        if getattr(sys, "frozen", False):
+            tams_exe = Path(sys.executable).parent / "TAMS.exe"
+            cmd = [str(tams_exe)] if tams_exe.exists() else [sys.executable]
+        else:
+            main_script = ROOT_DIR / "main.py"
+            cmd = [sys.executable, str(main_script)]
         try:
-            subprocess.Popen([sys.executable, str(main_script)])
+            subprocess.Popen(cmd)
         except Exception as e:
             logger.error("Could not launch main TAMS application: %s", e)
 
@@ -221,6 +281,7 @@ def run_tray():
 
     # Exit action
     def exit_helper():
+        worker.stop()
         engine.stop()
         tray_icon.hide()
         app.quit()
@@ -232,22 +293,51 @@ def run_tray():
     tray_icon.setContextMenu(menu)
     tray_icon.show()
 
-    # Periodic background timer
+    # Connect worker signals
+    def on_status_updated(st: str, online: bool):
+        status_action.setText(f"Status: {st} ({'Online' if online else 'Offline'})")
+        if not engine.is_running:
+            app.quit()
+
+    def on_cycle_done(res: dict, manual: bool):
+        summary = res.get("summary", {})
+        processed = summary.get("processed", 0)
+        accepted = summary.get("accepted", 0)
+        failed = summary.get("failed", 0)
+
+        if manual:
+            tray_icon.showMessage(
+                "TAMS Queue Processed",
+                f"Processed: {processed} | Accepted: {accepted} | Failed: {failed}",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+        elif processed > 0:
+            tray_icon.showMessage(
+                "TAMS Background Delivery",
+                f"Dispatched {processed} messages ({accepted} accepted by Meta).",
+                QSystemTrayIcon.MessageIcon.Information,
+                2500,
+            )
+
+    worker.status_updated.connect(on_status_updated)
+    worker.cycle_done.connect(on_cycle_done)
+
+    # Periodic background timer (triggers worker thread)
     timer = QTimer()
 
-    def on_timer():
-        res = engine.run_single_cycle()
-        st = res.get("status", "RUNNING")
-        status_action.setText(f"Status: {st} ({'Online' if engine.last_online_status else 'Offline'})")
+    def on_timer_tick():
+        if not worker.isRunning():
+            worker.trigger_cycle(manual=False)
 
-    timer.timeout.connect(on_timer)
+    timer.timeout.connect(on_timer_tick)
     timer.start(15000)  # 15 seconds
 
-    # Initial cycle
-    QTimer.singleShot(500, on_timer)
+    # Initial cycle shortly after event loop starts
+    QTimer.singleShot(1000, on_timer_tick)
 
     # Clean app exit hook
-    app.aboutToQuit.connect(engine.stop)
+    app.aboutToQuit.connect(exit_helper)
 
     sys.exit(app.exec())
 
@@ -261,7 +351,7 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.headless or not os.environ.get("DISPLAY", "") and sys.platform != "win32":
+    if args.headless or (not os.environ.get("DISPLAY", "") and sys.platform != "win32"):
         run_headless()
     else:
         run_tray()

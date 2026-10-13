@@ -7,10 +7,8 @@ integrity validation, retention management, and recovery.
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import sqlite3
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -31,7 +29,7 @@ def get_backup_directory() -> Path:
 def create_database_backup(
     *,
     custom_label: str | None = None,
-    max_retention: int = 10,
+    max_retention: int | None = None,
 ) -> dict[str, Any]:
     """
     Creates a transaction-consistent SQLite online backup using SQLite's backup API.
@@ -41,6 +39,16 @@ def create_database_backup(
     """
     backup_dir = get_backup_directory()
     db_path = Path(DATABASE_PATH)
+
+    if max_retention is None:
+        try:
+            from app.database.connection import SessionLocal
+            from app.services.messaging_service import get_messaging_config
+            with SessionLocal() as session:
+                cfg = get_messaging_config(session)
+                max_retention = int(cfg.get("max_backup_retention", "10"))
+        except Exception:
+            max_retention = 10
 
     if not db_path.exists():
         return {

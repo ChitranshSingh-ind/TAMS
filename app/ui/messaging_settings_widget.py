@@ -7,31 +7,21 @@ opt-out preferences, and safe diagnostics.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from typing import Any
 
 from PyQt6.QtCore import Qt, QTime
-from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QDialog,
     QFormLayout,
-    QFrame,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QSpinBox,
-    QStackedWidget,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -45,13 +35,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
-from app.database.models.batch import Batch
 from app.database.models.message import (
     Message,
     MessageTemplate,
-    MessagingConfig,
     NotificationRule,
-    RecipientPreference,
 )
 from app.services.messaging_service import (
     ensure_messaging_seed_data,
@@ -62,7 +49,6 @@ from app.services.messaging_service import (
 from app.services.whatsapp_provider import (
     DEFAULT_GRAPH_API_VERSION,
     get_access_token,
-    mask_phone_number,
     mask_token,
     normalize_phone_number,
     remove_access_token,

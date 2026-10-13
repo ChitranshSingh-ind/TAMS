@@ -15,7 +15,7 @@ import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database.models.batch import Batch
@@ -34,7 +34,6 @@ from app.services.whatsapp_provider import (
     WhatsAppConfig,
     get_access_token,
     mask_phone_number,
-    mask_token,
     normalize_phone_number,
 )
 

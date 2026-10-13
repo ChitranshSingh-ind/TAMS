@@ -1,3 +1,13 @@
+"""
+TAMS Dashboard Alerts Service.
+
+Aggregates operational reminders and urgent notifications across coaching domains:
+  - Daily unexcused absences
+  - Overdue student tuition fee balances
+  - Upcoming scheduled tests and diagnostic assessments
+  - Unpaid operational expense liabilities
+"""
+
 from datetime import date
 
 from sqlalchemy import func, select
@@ -13,6 +23,17 @@ def get_dashboard_alerts(
     session: Session,
     batch_id: int | None = None,
 ) -> list[str]:
+    """
+    Evaluates system status and returns a formatted list of human-readable alert strings
+    displayed in the Dashboard 'Alerts & Notifications' card.
+
+    Args:
+        session: Active database session.
+        batch_id: Optional batch filter (if None, summarizes all batches).
+
+    Returns:
+        List of formatted alert messages (e.g. ['2 student(s) absent today.']).
+    """
 
     alerts = []
 

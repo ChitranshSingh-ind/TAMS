@@ -3,7 +3,7 @@ from datetime import date, datetime, UTC
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select, or_
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.database.models.expense import Expense

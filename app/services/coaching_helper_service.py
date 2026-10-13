@@ -24,10 +24,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.database.connection import DATABASE_PATH, DATA_DIR, SessionLocal
+from app.database.connection import DATA_DIR, SessionLocal
 from app.services.backup_service import create_database_backup, list_backups
 from app.services.messaging_service import (
-    get_messaging_config,
     get_messaging_overview_stats,
     process_message_queue,
 )

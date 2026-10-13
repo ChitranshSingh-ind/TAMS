@@ -1,3 +1,11 @@
+"""
+Student Database Model.
+
+Represents an individual enrolled student in the coaching institute.
+Tracks academic admission number, batch affiliation, contact links to Parent,
+custom monthly fee rates, and status lifecycle ('ACTIVE', 'INACTIVE', 'ALUMNI').
+"""
+
 from datetime import date, datetime, UTC
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String
@@ -7,10 +15,15 @@ from app.database.base import Base
 
 
 class Student(Base):
+    """
+    SQLAlchemy ORM model for enrolled coaching students.
+    """
     __tablename__ = "students"
 
+    # Primary key identifier
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    # Unique institutional admission/roll number (e.g., 'ADM-2026-042')
     admission_number: Mapped[str] = mapped_column(
         String(50),
         unique=True,

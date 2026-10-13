@@ -1,3 +1,10 @@
+"""
+Batch Database Model.
+
+Represents an academic cohort or class (e.g. 'Class 10 Mathematics', 'Droppers NEET Biology').
+Batches define weekly class days, schedules, default fee structures, and link to enrolled students.
+"""
+
 from datetime import datetime, UTC
 
 from sqlalchemy import Boolean, DateTime, Numeric, String, Time
@@ -7,10 +14,16 @@ from app.database.base import Base
 
 
 class Batch(Base):
+    """
+    SQLAlchemy ORM model for coaching batches.
+    Stores schedule timings, active status flag, and relationships to students and fees.
+    """
     __tablename__ = "batches"
 
+    # Primary key identifier
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    # Unique batch name (e.g., 'Class 12 Physics')
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
     start_time: Mapped[Time | None] = mapped_column(Time, nullable=True)

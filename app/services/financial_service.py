@@ -1,3 +1,13 @@
+"""
+TAMS Financial & P&L Intelligence Service.
+
+Computes comprehensive fiscal health analytics across student fees and operating expenses:
+  - Cash-basis cash flow (actual money in vs. actual money out)
+  - Accrual-basis profitability (fees billed vs. liabilities incurred)
+  - Pending receivables and outstanding payables
+  - Historical monthly financial trends and profit margins
+"""
+
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -5,13 +15,14 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database.models.fee import Fee
-from app.database.models.fee_payment import FeePayment
 from app.database.models.expense import Expense
 from app.database.models.expense_payment import ExpensePayment
+from app.database.models.fee import Fee
+from app.database.models.fee_payment import FeePayment
 
 
 def _to_decimal(val: Any) -> Decimal:
+    """Helper to safely convert numeric or None values to 2-decimal-place Decimal."""
     if val is None:
         return Decimal("0.00")
     return Decimal(str(val)).quantize(Decimal("0.01"))
@@ -22,6 +33,19 @@ def get_financial_summary(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> dict[str, Any]:
+    """
+    Computes an aggregated financial summary comparing fee collections against expenses,
+    covering both cash-basis and accrual-basis accounting.
+
+    Args:
+        session: Active database session.
+        start_date: Optional start date filter.
+        end_date: Optional end date filter.
+
+    Returns:
+        Dict containing fees_collected, expenses_paid, net_cash_flow,
+        fees_billed, expenses_incurred, net_accrual_profit, and receivables/payables.
+    """
     # ── 1. Cash-based metrics (Actual payments received vs actual payments made) ──
     fee_pay_stmt = select(func.coalesce(func.sum(FeePayment.amount), 0)).where(
         FeePayment.is_reversed.is_(False)
@@ -107,6 +131,17 @@ def get_monthly_financial_comparison(
     session: Session,
     months_count: int = 6,
 ) -> list[dict[str, Any]]:
+    """
+    Computes a month-by-month comparative analysis of revenue and expenses
+    for the last N months. Used for financial chart rendering.
+
+    Args:
+        session: Active database session.
+        months_count: Number of historical months to include (default: 6).
+
+    Returns:
+        List of monthly records with fees_collected, expenses_paid, and profit margins.
+    """
     today = date.today()
     results = []
 

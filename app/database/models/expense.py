@@ -1,13 +1,24 @@
+"""
+Expense Database Model.
+
+Represents an operating expenditure, bill, or vendor invoice incurred by the coaching institute.
+Tracks expense category, bill amount, payments made, payment status ('PAID', 'PARTIALLY_PAID', 'PENDING'),
+and links to granular ExpensePayment transactions.
+"""
+
 from datetime import date, datetime, UTC
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Date, DateTime, Index, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
 
 
 class Expense(Base):
+    """
+    SQLAlchemy ORM model for institutional expenses and operational costs.
+    """
     __tablename__ = "expenses"
     __table_args__ = (
         Index("ix_expenses_expense_date", "expense_date"),

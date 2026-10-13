@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import os
 import socket
-import time
 import uuid
 from typing import Any
 
@@ -20,10 +19,8 @@ from app.database.connection import SessionLocal
 from app.services.coaching_helper_service import (
     get_helper_process_info,
     is_helper_process_running,
-    read_helper_status,
     restart_helper_process,
     start_helper_process,
-    stop_helper_process,
     trigger_helper_queue_cycle,
 )
 from app.services.messaging_service import (

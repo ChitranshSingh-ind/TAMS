@@ -7,7 +7,7 @@ high DPI crispness, clean TAMS palette, and robust empty-state handling.
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QRectF, QPointF
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QLinearGradient
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 from PyQt6.QtWidgets import QWidget, QSizePolicy
 
 

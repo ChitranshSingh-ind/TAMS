@@ -7,17 +7,14 @@ and integrated Messaging Settings & Automation Rules.
 
 from __future__ import annotations
 
-import csv
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from typing import Any
 
-from PyQt6.QtCore import QDate, Qt
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QAbstractItemView,
     QCheckBox,
     QComboBox,
-    QDateEdit,
     QDialog,
     QFileDialog,
     QFormLayout,
@@ -25,14 +22,11 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
-    QSplitter,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -41,7 +35,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.database.connection import SessionLocal
 from app.database.models.batch import Batch
@@ -53,10 +47,8 @@ from app.services.messaging_service import (
     export_message_history_csv,
     get_eligible_recipients,
     get_message_history_records,
-    get_messaging_config,
     get_messaging_overview_stats,
     queue_bulk_messages,
-    queue_message,
     render_template_text,
     retry_failed_message,
 )
@@ -64,8 +56,6 @@ from app.ui.chart_widgets import SegmentedDistributionWidget
 from app.ui.messaging_settings_widget import MessagingSettingsWidget
 from app.ui.table_utils import (
     configure_table_ux,
-    restore_table_state,
-    save_table_state,
     TableSizingStrategy,
     auto_fit_columns,
 )

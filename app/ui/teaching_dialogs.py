@@ -7,7 +7,6 @@ from datetime import date, timedelta
 
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -15,15 +14,11 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,

@@ -1,5 +1,4 @@
-import csv
-from datetime import date, datetime, UTC
+from datetime import date
 from decimal import Decimal
 
 from PyQt6.QtCore import Qt, QDate
@@ -12,7 +11,6 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -20,14 +18,12 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
-    QWidget,
 )
 from sqlalchemy import select
 
 from app.ui.table_utils import configure_table_ux, TableSizingStrategy, auto_fit_columns
 
 from app.database.connection import SessionLocal
-from app.database.models.batch import Batch
 from app.database.models.student import Student
 from app.services.batch_service import get_active_batches
 from app.services.fee_service import (

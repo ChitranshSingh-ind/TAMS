@@ -13,20 +13,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any
 
-from PyQt6.QtCore import QEvent, QModelIndex, QObject, QPoint, QRect, Qt
-from PyQt6.QtGui import QFontMetrics, QPainter
+from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtGui import QFontMetrics
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
-    QStyleOptionViewItem,
     QStyledItemDelegate,
     QTableView,
     QTableWidget,
     QTableWidgetItem,
     QToolTip,
-    QWidget,
 )
 
 # TAMS Design Palette

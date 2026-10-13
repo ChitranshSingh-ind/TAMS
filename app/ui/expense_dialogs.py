@@ -1,5 +1,3 @@
-from datetime import date, datetime, UTC
-from decimal import Decimal
 
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtWidgets import (
@@ -13,16 +11,13 @@ from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QVBoxLayout,
-    QWidget,
 )
 
 from app.database.connection import SessionLocal

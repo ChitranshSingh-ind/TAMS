@@ -1,11 +1,19 @@
+"""
+TAMS Database Engine & Connection Infrastructure.
+
+Manages the SQLite database path across Windows, macOS, and Linux, ensuring data
+is isolated in user-standard application directories. Configures SQLite for safe
+multi-process concurrency (TAMS desktop app + CoachingHelper background companion)
+using Write-Ahead Logging (WAL), foreign keys, and busy timeouts.
+"""
+
 from pathlib import Path
+import os
+import sys
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-
-import os
-import sys
 
 # Keep application data separate from source code, cross-platform.
 def _resolve_data_dir() -> Path:
@@ -20,11 +28,11 @@ def _resolve_data_dir() -> Path:
     target.mkdir(parents=True, exist_ok=True)
     return target
 
-DATA_DIR = _resolve_data_dir()
+DATA_DIR = Path(os.environ["TAMS_DATA_DIR"]) if "TAMS_DATA_DIR" in os.environ else _resolve_data_dir()
 
-DATABASE_PATH = DATA_DIR / "tams.db"
+DATABASE_PATH = Path(os.environ["TAMS_DATABASE_PATH"]) if "TAMS_DATABASE_PATH" in os.environ else (DATA_DIR / "tams.db")
 
-DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+DATABASE_URL = os.environ.get("TAMS_DATABASE_URL", f"sqlite:///{DATABASE_PATH}")
 
 engine = create_engine(
     DATABASE_URL,

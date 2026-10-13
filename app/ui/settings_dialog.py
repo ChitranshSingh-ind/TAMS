@@ -1,10 +1,8 @@
-import json
-import logging
 import sys
-from datetime import datetime, time, timezone
+from datetime import time
 from pathlib import Path
-from PyQt6.QtCore import QObject, QThread, QTimer, Qt, QTime, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QDesktopServices
+from PyQt6.QtCore import QThread, QTimer, Qt, QTime, QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices
 
 
 from PyQt6.QtWidgets import (
@@ -12,13 +10,9 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QFileDialog,
     QFormLayout,
     QFrame,
-    QGridLayout,
-    QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -37,12 +31,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from sqlalchemy import select
-from app.database.connection import DATABASE_PATH, DATA_DIR, SessionLocal
+from app.database.connection import DATABASE_PATH, SessionLocal
 from app.database.models.batch import Batch
 from app.database.models.message import (
-    Message,
     MessageTemplate,
-    MessagingConfig,
     NotificationRule,
 )
 from app.services.backup_service import (
@@ -55,14 +47,11 @@ from app.services.batch_service import (
     create_batch,
     get_active_batches,
     update_batch,
-    deactivate_batch,
     reactivate_batch,
-    get_batch,
 )
 from app.services.coaching_helper_service import (
     check_for_updates,
     get_helper_process_info,
-    get_helper_status_file_path,
     is_windows_autostart_enabled,
     restart_helper_process,
     set_windows_autostart,
@@ -78,7 +67,6 @@ from app.services.messaging_service import (
 )
 from app.services.whatsapp_provider import (
     DEFAULT_GRAPH_API_VERSION,
-    WhatsAppCloudProvider,
     get_access_token,
     mask_token,
     remove_access_token,
@@ -89,14 +77,16 @@ from app.ui.table_utils import TableSizingStrategy, auto_fit_columns, configure_
 
 
 
-NAVY = "#012D54"
-DARK_NAVY = "#04294D"
-GOLD = "#D9B85F"
-LIGHT_GOLD = "#E9DEBA"
-CREAM = "#F8F6EA"
-WHITE = "#FEFEFE"
-TEXT = "#1F2937"
-MUTED = "#615F4B"
+from app.ui.theme import (
+    NAVY,
+    DARK_NAVY,
+    GOLD,
+    LIGHT_GOLD,
+    CREAM,
+    WHITE,
+    TEXT,
+    MUTED,
+)
 class TAMSTimeEdit(QTimeEdit):
     def __init__(self, parent=None):
         super().__init__(parent)

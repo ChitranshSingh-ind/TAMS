@@ -1,3 +1,12 @@
+"""
+Fee Database Model.
+
+Represents a monthly billing schedule / fee invoice for a student.
+Tracks gross amount, applied discounts, net payable, total amount paid,
+due dates, and payment status ('PAID', 'PARTIALLY_PAID', 'OVERDUE', 'PENDING').
+Enforces that a student can only have one fee invoice per academic year and month.
+"""
+
 from datetime import date, datetime, UTC
 from decimal import Decimal
 
@@ -8,6 +17,10 @@ from app.database.base import Base
 
 
 class Fee(Base):
+    """
+    SQLAlchemy ORM model for student fee schedules.
+    Provides calculated properties for outstanding balances and payment progress.
+    """
     __tablename__ = "fees"
     __table_args__ = (
         Index(

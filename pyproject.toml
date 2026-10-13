@@ -15,6 +15,7 @@ dependencies = [
     "PyQt6>=6.6.0",
     "SQLAlchemy>=2.0.0",
     "alembic>=1.13.0",
+    "requests>=2.28.0",
 ]
 
 [project.optional-dependencies]

@@ -18,7 +18,6 @@ import os
 import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 # Ensure repository root is in python path
@@ -26,13 +25,12 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from app.database.connection import DATABASE_PATH, DATA_DIR
+from app.database.connection import DATABASE_PATH
 from app.services.backup_service import create_database_backup
 from app.services.coaching_helper_service import (
     APP_VERSION,
     CoachingHelperEngine,
     check_for_updates,
-    is_helper_process_running,
     setup_helper_logging,
 )
 
@@ -72,7 +70,7 @@ def run_headless():
 def run_tray():
     """Runs CoachingHelper with a Windows/Desktop System Tray icon and non-blocking worker thread."""
     try:
-        from PyQt6.QtCore import QMutex, QObject, QThread, QTimer, pyqtSignal, pyqtSlot
+        from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
         from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
         from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
     except ImportError:

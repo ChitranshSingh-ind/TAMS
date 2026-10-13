@@ -364,6 +364,7 @@ class SettingsDialog(QDialog):
         )
 
         main_layout.addWidget(body)
+        self.load_general_settings()
         self.load_batches()
         self.load_whatsapp_settings()
         self.load_automation_settings()
@@ -371,43 +372,186 @@ class SettingsDialog(QDialog):
 
     def create_general_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(35, 30, 35, 30)
-        layout.setSpacing(12)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; } "
+            "QScrollArea > QWidget > QWidget { background: transparent; }"
+        )
 
-        title = QLabel("General")
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(35, 30, 35, 30)
+        layout.setSpacing(18)
+
+        title = QLabel("General Settings")
         title.setObjectName("pageTitle")
 
         description = QLabel(
-            "Basic settings for your coaching management system."
+            "Configure coaching institute profile, academic sessions, contact information, and institutional preferences."
         )
         description.setObjectName("pageDescription")
 
         layout.addWidget(title)
         layout.addWidget(description)
 
-        card = QFrame()
-        card.setObjectName("settingsCard")
+        # ── Card 1: Coaching Institute Profile ──────────────
+        profile_card = QFrame()
+        profile_card.setObjectName("settingsCard")
+        p_layout = QVBoxLayout(profile_card)
+        p_layout.setContentsMargins(22, 20, 22, 20)
+        p_layout.setSpacing(14)
 
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
-
-        label = QLabel("Coaching details")
-        label.setObjectName("cardTitle")
-
-        info = QLabel(
-            "Coaching name, address, academic year and other "
-            "general information can be configured here."
+        p_title = QLabel("Coaching Institute Profile")
+        p_title.setObjectName("cardTitle")
+        p_subtitle = QLabel(
+            "Basic identification details displayed across the application and reports."
         )
-        info.setWordWrap(True)
-        info.setObjectName("cardText")
+        p_subtitle.setObjectName("cardText")
+        p_layout.addWidget(p_title)
+        p_layout.addWidget(p_subtitle)
 
-        card_layout.addWidget(label)
-        card_layout.addWidget(info)
+        p_form = QFormLayout()
+        p_form.setSpacing(12)
 
-        layout.addWidget(card)
+        self.gen_coaching_name_input = QLineEdit()
+        self.gen_coaching_name_input.setPlaceholderText("e.g. Apex Coaching Institute")
+        p_form.addRow("Coaching Name *:", self.gen_coaching_name_input)
+
+        self.gen_tagline_input = QLineEdit()
+        self.gen_tagline_input.setPlaceholderText("e.g. Empowering Students Towards Excellence")
+        p_form.addRow("Tagline / Motto:", self.gen_tagline_input)
+
+        self.gen_academic_session_input = QLineEdit()
+        self.gen_academic_session_input.setPlaceholderText("e.g. 2026–2027")
+        p_form.addRow("Academic Session / Year *:", self.gen_academic_session_input)
+
+        p_layout.addLayout(p_form)
+        layout.addWidget(profile_card)
+
+        # ── Card 2: Contact & Address Information ───────────
+        contact_card = QFrame()
+        contact_card.setObjectName("settingsCard")
+        c_layout = QVBoxLayout(contact_card)
+        c_layout.setContentsMargins(22, 20, 22, 20)
+        c_layout.setSpacing(14)
+
+        c_title = QLabel("Contact & Address Information")
+        c_title.setObjectName("cardTitle")
+        c_subtitle = QLabel(
+            "Address, contact number, and email used for communications and fee receipts."
+        )
+        c_subtitle.setObjectName("cardText")
+        c_layout.addWidget(c_title)
+        c_layout.addWidget(c_subtitle)
+
+        c_form = QFormLayout()
+        c_form.setSpacing(12)
+
+        self.gen_phone_input = QLineEdit()
+        self.gen_phone_input.setPlaceholderText("e.g. +91 98765 43210")
+        c_form.addRow("Contact Phone:", self.gen_phone_input)
+
+        self.gen_email_input = QLineEdit()
+        self.gen_email_input.setPlaceholderText("e.g. contact@apexcoaching.com")
+        c_form.addRow("Official Email:", self.gen_email_input)
+
+        self.gen_address_input = QTextEdit()
+        self.gen_address_input.setPlaceholderText("Full institutional address, city, state, pin code...")
+        self.gen_address_input.setFixedHeight(75)
+        c_form.addRow("Address:", self.gen_address_input)
+
+        c_layout.addLayout(c_form)
+        layout.addWidget(contact_card)
+
+        # ── Card 3: Academic & Operational Defaults ─────────
+        acad_card = QFrame()
+        acad_card.setObjectName("settingsCard")
+        a_layout = QVBoxLayout(acad_card)
+        a_layout.setContentsMargins(22, 20, 22, 20)
+        a_layout.setSpacing(14)
+
+        a_title = QLabel("Academic & Operational Defaults")
+        a_title.setObjectName("cardTitle")
+        a_subtitle = QLabel(
+            "Default operational values for fee schedules, attendance tracking, and grading."
+        )
+        a_subtitle.setObjectName("cardText")
+        a_layout.addWidget(a_title)
+        a_layout.addWidget(a_subtitle)
+
+        a_form = QFormLayout()
+        a_form.setSpacing(12)
+
+        self.gen_currency_symbol_input = QLineEdit()
+        self.gen_currency_symbol_input.setPlaceholderText("₹")
+        self.gen_currency_symbol_input.setMaximumWidth(80)
+        a_form.addRow("Currency Symbol:", self.gen_currency_symbol_input)
+
+        self.gen_fee_due_day_spin = QSpinBox()
+        self.gen_fee_due_day_spin.setRange(1, 28)
+        self.gen_fee_due_day_spin.setSuffix("th of every month")
+        self.gen_fee_due_day_spin.setMaximumWidth(170)
+        a_form.addRow("Default Fee Due Day:", self.gen_fee_due_day_spin)
+
+        self.gen_attendance_warn_spin = QSpinBox()
+        self.gen_attendance_warn_spin.setRange(10, 100)
+        self.gen_attendance_warn_spin.setSuffix("%")
+        self.gen_attendance_warn_spin.setMaximumWidth(120)
+        a_form.addRow("Attendance Warning Threshold:", self.gen_attendance_warn_spin)
+
+        self.gen_pass_percent_spin = QSpinBox()
+        self.gen_pass_percent_spin.setRange(10, 100)
+        self.gen_pass_percent_spin.setSuffix("%")
+        self.gen_pass_percent_spin.setMaximumWidth(120)
+        a_form.addRow("Pass Marks Threshold:", self.gen_pass_percent_spin)
+
+        a_layout.addLayout(a_form)
+        layout.addWidget(acad_card)
+
+        # ── Card 4: UI & Data Preferences ───────────────────
+        ui_card = QFrame()
+        ui_card.setObjectName("settingsCard")
+        u_layout = QVBoxLayout(ui_card)
+        u_layout.setContentsMargins(22, 20, 22, 20)
+        u_layout.setSpacing(12)
+
+        u_title = QLabel("Application & Privacy Preferences")
+        u_title.setObjectName("cardTitle")
+        u_layout.addWidget(u_title)
+
+        self.gen_confirm_deletions_cb = QCheckBox("Prompt for confirmation before deleting records (students, batches, fees)")
+        self.gen_mask_phone_numbers_cb = QCheckBox("Mask parent and student phone numbers in general views (e.g. +91 98*** **210)")
+
+        u_layout.addWidget(self.gen_confirm_deletions_cb)
+        u_layout.addWidget(self.gen_mask_phone_numbers_cb)
+
+        layout.addWidget(ui_card)
+
+        # ── Action Buttons ──────────────────────────────────
+        btn_bar = QHBoxLayout()
+        btn_bar.setSpacing(10)
+
+        btn_bar.addStretch()
+
+        self.gen_revert_btn = QPushButton("Revert Changes")
+        self.gen_revert_btn.setObjectName("secondaryButton")
+        self.gen_revert_btn.clicked.connect(self.load_general_settings)
+        btn_bar.addWidget(self.gen_revert_btn)
+
+        self.gen_save_btn = QPushButton("Save General Settings")
+        self.gen_save_btn.setObjectName("primaryButton")
+        self.gen_save_btn.clicked.connect(self._on_save_general_settings)
+        btn_bar.addWidget(self.gen_save_btn)
+
+        layout.addLayout(btn_bar)
         layout.addStretch()
 
+        scroll.setWidget(container)
+        outer_layout = QVBoxLayout(page)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(scroll)
         return page
 
     def create_batches_page(self):
@@ -1412,6 +1556,78 @@ class SettingsDialog(QDialog):
     def _on_open_backup_dir(self):
         backup_dir = get_backup_directory()
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(backup_dir)))
+
+    # ── TAB 1: GENERAL SETTINGS LOAD & SAVE ────────────────────────────────────
+    def load_general_settings(self):
+        with SessionLocal() as session:
+            ensure_messaging_seed_data(session)
+            cfg = get_messaging_config(session)
+
+            self.gen_coaching_name_input.setText(cfg.get("coaching_name", "TAMS Coaching Academy"))
+            self.gen_tagline_input.setText(cfg.get("coaching_tagline", "Excellence in Education"))
+            self.gen_academic_session_input.setText(cfg.get("academic_session", "2026–2027"))
+            self.gen_phone_input.setText(cfg.get("coaching_phone", ""))
+            self.gen_email_input.setText(cfg.get("coaching_email", ""))
+            self.gen_address_input.setPlainText(cfg.get("coaching_address", ""))
+
+            self.gen_currency_symbol_input.setText(cfg.get("currency_symbol", "₹"))
+            try:
+                self.gen_fee_due_day_spin.setValue(int(cfg.get("default_fee_due_day", "5")))
+            except (ValueError, TypeError):
+                self.gen_fee_due_day_spin.setValue(5)
+
+            try:
+                self.gen_attendance_warn_spin.setValue(int(cfg.get("attendance_warning_threshold", "75")))
+            except (ValueError, TypeError):
+                self.gen_attendance_warn_spin.setValue(75)
+
+            try:
+                self.gen_pass_percent_spin.setValue(int(cfg.get("pass_percentage_threshold", "40")))
+            except (ValueError, TypeError):
+                self.gen_pass_percent_spin.setValue(40)
+
+            self.gen_confirm_deletions_cb.setChecked(cfg.get("ui_confirm_deletions", "true").lower() == "true")
+            self.gen_mask_phone_numbers_cb.setChecked(cfg.get("ui_mask_phone_numbers", "false").lower() == "true")
+
+    def _on_save_general_settings(self):
+        name = self.gen_coaching_name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Validation Error", "Coaching Name is required.")
+            self.gen_coaching_name_input.setFocus()
+            return
+
+        session_val = self.gen_academic_session_input.text().strip()
+        if not session_val:
+            QMessageBox.warning(self, "Validation Error", "Academic Session / Year is required.")
+            self.gen_academic_session_input.setFocus()
+            return
+
+        curr_sym = self.gen_currency_symbol_input.text().strip() or "₹"
+
+        new_configs = {
+            "coaching_name": name,
+            "coaching_tagline": self.gen_tagline_input.text().strip(),
+            "academic_session": session_val,
+            "coaching_phone": self.gen_phone_input.text().strip(),
+            "coaching_email": self.gen_email_input.text().strip(),
+            "coaching_address": self.gen_address_input.toPlainText().strip(),
+            "currency_symbol": curr_sym,
+            "default_fee_due_day": str(self.gen_fee_due_day_spin.value()),
+            "attendance_warning_threshold": str(self.gen_attendance_warn_spin.value()),
+            "pass_percentage_threshold": str(self.gen_pass_percent_spin.value()),
+            "ui_confirm_deletions": "true" if self.gen_confirm_deletions_cb.isChecked() else "false",
+            "ui_mask_phone_numbers": "true" if self.gen_mask_phone_numbers_cb.isChecked() else "false",
+        }
+
+        with SessionLocal() as session:
+            update_messaging_config(session, new_configs)
+
+        QMessageBox.information(
+            self,
+            "Settings Saved",
+            "General coaching settings have been saved successfully!"
+        )
+        self.load_general_settings()
 
 
     def apply_styles(self):

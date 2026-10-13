@@ -5,6 +5,10 @@ from app.ui.add_student_dialog import AddStudentDialog
 from PyQt6.QtCore import Qt, QDate
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
+from app.services.messaging_service import (
+    ensure_messaging_seed_data,
+    get_messaging_config,
+)
 from app.services.student_service import (
     count_students,
     get_students_by_batch,
@@ -190,6 +194,7 @@ class MainWindow(QMainWindow):
 
         title = QLabel("Coaching Management System")
         title.setObjectName("appTitle")
+        self.app_title_label = title
 
         settings_button = QPushButton("⚙")
         settings_button.setObjectName("settingButton")
@@ -344,6 +349,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(content_widget)
 
         self.apply_styles()
+        self.load_coaching_profile()
         self.load_batches()
 
         # Start CoachingHelper background worker thread
@@ -354,6 +360,30 @@ class MainWindow(QMainWindow):
         if not os.environ.get("PYTEST_CURRENT_TEST"):
             self.coaching_helper.start()
 
+    def load_coaching_profile(self):
+        try:
+            with SessionLocal() as session:
+                ensure_messaging_seed_data(session)
+                cfg = get_messaging_config(session)
+                coaching_name = cfg.get("coaching_name", "TAMS Coaching Academy").strip() or "TAMS"
+                tagline = cfg.get("coaching_tagline", "").strip()
+                academic_session = cfg.get("academic_session", "").strip()
+
+            self.setWindowTitle(f"TAMS - {coaching_name}" if coaching_name != "TAMS" else "TAMS - Coaching Management System")
+            if hasattr(self, "app_title_label"):
+                title_text = coaching_name
+                if academic_session:
+                    title_text += f" ({academic_session})"
+                self.app_title_label.setText(title_text)
+
+            if hasattr(self, "dashboard_subtitle_label"):
+                if tagline:
+                    self.dashboard_subtitle_label.setText(f"{tagline} • Here's what's happening with your coaching today.")
+                else:
+                    self.dashboard_subtitle_label.setText("Here's what's happening with your coaching today.")
+        except Exception:
+            pass
+
     def closeEvent(self, event):
         if hasattr(self, "coaching_helper") and self.coaching_helper.isRunning():
             self.coaching_helper.stop()
@@ -362,6 +392,7 @@ class MainWindow(QMainWindow):
     def open_settings(self, initial_tab: int = 0):
         dialog = SettingsDialog(self, initial_tab=initial_tab)
         dialog.exec()
+        self.load_coaching_profile()
         self.load_batches()
         
     def apply_styles(self):
@@ -1355,6 +1386,7 @@ class MainWindow(QMainWindow):
             "Here's what's happening with your coaching today."
         )
         subtitle.setObjectName("dashboardSubtitle")
+        self.dashboard_subtitle_label = subtitle
 
         header_layout.addWidget(greeting)
         header_layout.addWidget(subtitle)

@@ -1,5 +1,5 @@
 """
-TAMS (Tuition & Academic Management System) — Main Application Entry Point.
+TAMS (Tuition Analysis & Management System) — Main Application Entry Point.
 
 This module initializes the application environment, configures platform-specific
 fonts, establishes global uncaught-exception crash logging with desktop alert dialogs,

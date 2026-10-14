@@ -472,12 +472,32 @@ class MainWindow(
 
             /* ── General ComboBox ── */
             QComboBox {{
-                padding: 7px 12px;
+                padding: 7px 28px 7px 12px;
                 border: 1px solid {GOLD};
                 border-radius: 7px;
                 background: {WHITE};
                 color: {TEXT};
                 font-size: 13px;
+            }}
+
+            QComboBox:focus {{
+                border: 2px solid {NAVY};
+            }}
+
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
+                border: none;
+            }}
+
+            QComboBox::down-arrow {{
+                width: 0px;
+                height: 0px;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid {NAVY};
+                margin-right: 8px;
             }}
 
             QComboBox QAbstractItemView {{
@@ -505,6 +525,10 @@ class MainWindow(
             QTableWidget::item {{
                 padding: 8px 12px;
                 border-bottom: 1px solid #F1EBD3;
+            }}
+
+            QTableWidget::item:hover {{
+                background-color: #FAF8EE;
             }}
 
             QTableWidget::item:selected {{
@@ -1056,6 +1080,7 @@ class MainWindow(
             }}
 
             QDialog QLineEdit,
+            QDialog QTextEdit,
             QDialog QComboBox,
             QDialog QDateEdit,
             QDialog QSpinBox,
@@ -1070,6 +1095,7 @@ class MainWindow(
             }}
 
             QDialog QLineEdit:focus,
+            QDialog QTextEdit:focus,
             QDialog QComboBox:focus,
             QDialog QDateEdit:focus,
             QDialog QSpinBox:focus,

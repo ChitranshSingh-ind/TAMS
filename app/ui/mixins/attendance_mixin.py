@@ -32,6 +32,16 @@ from app.ui.table_utils import (
     auto_fit_columns,
     configure_table_ux,
 )
+from app.ui.theme import (
+    CREAM,
+    DARK_NAVY,
+    GOLD,
+    LIGHT_GOLD,
+    MUTED,
+    NAVY,
+    TEXT,
+    WHITE,
+)
 
 
 class AttendanceMixin:
@@ -51,24 +61,24 @@ class AttendanceMixin:
 
         # Header
         title = QLabel("Attendance")
-        title.setStyleSheet("""
-            QLabel {
-                color: #012D54;
+        title.setStyleSheet(f"""
+            QLabel {{
+                color: {NAVY};
                 font-size: 26px;
                 font-weight: 700;
                 background: transparent;
-            }
+            }}
         """)
 
         subtitle = QLabel(
             "Mark attendance for the selected batch."
         )
-        subtitle.setStyleSheet("""
-            QLabel {
-                color: #615F4B;
+        subtitle.setStyleSheet(f"""
+            QLabel {{
+                color: {MUTED};
                 font-size: 13px;
                 background: transparent;
-            }
+            }}
         """)
 
         layout.addWidget(title)
@@ -80,12 +90,12 @@ class AttendanceMixin:
         date_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         date_label = QLabel("Date")
-        date_label.setStyleSheet("""
-            QLabel {
-                color: #012D54;
+        date_label.setStyleSheet(f"""
+            QLabel {{
+                color: {NAVY};
                 font-size: 13px;
                 font-weight: 600;
-            }
+            }}
         """)
 
         date_picker = QDateEdit()
@@ -94,16 +104,17 @@ class AttendanceMixin:
         date_picker.setDate(QDate.currentDate())
         date_picker.setCalendarPopup(True)
         date_picker.setFixedWidth(150)
+        date_picker.setFixedHeight(38)
 
-        date_picker.setStyleSheet("""
-            QDateEdit {
-                background-color: #FEFEFE;
-                color: #012D54;
-                border: 1px solid #E9DEBA;
+        date_picker.setStyleSheet(f"""
+            QDateEdit {{
+                background-color: {WHITE};
+                color: {NAVY};
+                border: 1px solid {LIGHT_GOLD};
                 border-radius: 6px;
                 padding: 7px 10px;
                 font-size: 13px;
-            }
+            }}
         """)
 
         date_layout.addWidget(date_label, alignment=Qt.AlignmentFlag.AlignVCenter)
@@ -112,25 +123,26 @@ class AttendanceMixin:
 
         mark_all_present_btn = QPushButton("✓ Mark All Present")
         mark_all_present_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        mark_all_present_btn.setFixedHeight(34)
-        mark_all_present_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #E9DEBA;
-                color: #012D54;
-                border: 1px solid #D9B85F;
-                border-radius: 6px;
+        mark_all_present_btn.setFixedHeight(38)
+        mark_all_present_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {CREAM};
+                color: {NAVY};
+                border: 1px solid {GOLD};
+                border-radius: 8px;
                 padding: 6px 14px;
                 font-size: 12px;
                 font-weight: 700;
-            }
-            QPushButton:hover:enabled {
-                background-color: #D9B85F;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover:enabled {{
+                background-color: {LIGHT_GOLD};
+                border-color: {NAVY};
+            }}
+            QPushButton:disabled {{
                 background-color: #F1EBD3;
                 color: #8B887A;
-                border-color: #E9DEBA;
-            }
+                border-color: {LIGHT_GOLD};
+            }}
         """)
         mark_all_present_btn.clicked.connect(lambda: self.set_all_attendance("PRESENT"))
         self.mark_all_present_btn = mark_all_present_btn
@@ -138,25 +150,26 @@ class AttendanceMixin:
 
         clear_all_btn = QPushButton("Clear All")
         clear_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        clear_all_btn.setFixedHeight(34)
-        clear_all_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FEFEFE;
-                color: #012D54;
-                border: 1px solid #E9DEBA;
-                border-radius: 6px;
+        clear_all_btn.setFixedHeight(38)
+        clear_all_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {WHITE};
+                color: {NAVY};
+                border: 1px solid {LIGHT_GOLD};
+                border-radius: 8px;
                 padding: 6px 14px;
                 font-size: 12px;
                 font-weight: 600;
-            }
-            QPushButton:hover:enabled {
-                background-color: #F1EBD3;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover:enabled {{
+                background-color: {CREAM};
+                border-color: {GOLD};
+            }}
+            QPushButton:disabled {{
                 background-color: #F9F9F9;
                 color: #BDBDBD;
                 border-color: #E5E7EB;
-            }
+            }}
         """)
         clear_all_btn.clicked.connect(lambda: self.set_all_attendance(None))
         self.clear_all_attendance_btn = clear_all_btn
@@ -210,22 +223,22 @@ class AttendanceMixin:
         # Save button
         save_button = QPushButton("Save Attendance")
         save_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        save_button.setFixedHeight(42)
+        save_button.setFixedHeight(40)
 
-        save_button.setStyleSheet("""
-            QPushButton {
-                background-color: #012D54;
-                color: #FEFEFE;
-                border: none;
-                border-radius: 7px;
-                padding: 8px 20px;
+        save_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {NAVY};
+                color: {WHITE};
+                border: 1px solid {NAVY};
+                border-radius: 8px;
+                padding: 8px 22px;
                 font-size: 13px;
                 font-weight: 600;
-            }
+            }}
 
-            QPushButton:hover {
-                background-color: #04294D;
-            }
+            QPushButton:hover {{
+                background-color: {DARK_NAVY};
+            }}
         """)
         save_button.clicked.connect(self.save_attendance)
         override_button = QPushButton("Override Class Day")
@@ -234,22 +247,23 @@ class AttendanceMixin:
         override_button.setCursor(
             Qt.CursorShape.PointingHandCursor
         )
-        override_button.setFixedHeight(42)
+        override_button.setFixedHeight(40)
 
-        override_button.setStyleSheet("""
-            QPushButton {
-                background-color: #E9DEBA;
-                color: #012D54;
-                border: 1px solid #D9B85F;
-                border-radius: 7px;
+        override_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {CREAM};
+                color: {NAVY};
+                border: 1px solid {GOLD};
+                border-radius: 8px;
                 padding: 8px 20px;
                 font-size: 13px;
                 font-weight: 600;
-            }
+            }}
 
-            QPushButton:hover {
-                background-color: #D9B85F;
-            }
+            QPushButton:hover {{
+                background-color: {LIGHT_GOLD};
+                border-color: {NAVY};
+            }}
         """)
 
         override_button.clicked.connect(

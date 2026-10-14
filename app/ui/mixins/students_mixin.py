@@ -42,6 +42,14 @@ from app.ui.table_utils import (
     auto_fit_columns,
     configure_table_ux,
 )
+from app.ui.theme import (
+    BADGE_AMBER_BG,
+    BADGE_AMBER_FG,
+    BADGE_GRAY_BG,
+    BADGE_GRAY_FG,
+    BADGE_GREEN_BG,
+    BADGE_GREEN_FG,
+)
 
 
 class StudentsMixin:
@@ -84,6 +92,7 @@ class StudentsMixin:
         # Bulk actions button
         self.bulk_actions_button = QPushButton("👥 Bulk Actions")
         self.bulk_actions_button.setObjectName("bulkActionsButton")
+        self.bulk_actions_button.setFixedHeight(38)
         self.bulk_actions_button.setCursor(
             Qt.CursorShape.PointingHandCursor
         )
@@ -93,6 +102,7 @@ class StudentsMixin:
         # Add student button
         add_student_button = QPushButton("+ Add Student")
         add_student_button.setObjectName("addStudentButton")
+        add_student_button.setFixedHeight(38)
         add_student_button.setCursor(
             Qt.CursorShape.PointingHandCursor
         )
@@ -239,6 +249,37 @@ class StudentsMixin:
                 status_item = QTableWidgetItem(student.status)
                 status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.students_table.setItem(row, 5, status_item)
+
+                # Status pill badge widget
+                status_widget = QWidget()
+                status_layout = QHBoxLayout(status_widget)
+                status_layout.setContentsMargins(0, 0, 0, 0)
+                status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                status_badge = QLabel()
+                status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                norm_status = (student.status or "ACTIVE").upper()
+                if norm_status == "ACTIVE":
+                    status_badge.setText("Active")
+                    status_badge.setStyleSheet(
+                        f"background-color: {BADGE_GREEN_BG}; color: {BADGE_GREEN_FG}; "
+                        "font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 5px;"
+                    )
+                elif norm_status == "ALUMNI":
+                    status_badge.setText("Alumni")
+                    status_badge.setStyleSheet(
+                        f"background-color: {BADGE_AMBER_BG}; color: {BADGE_AMBER_FG}; "
+                        "font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 5px;"
+                    )
+                else:
+                    status_badge.setText("Inactive")
+                    status_badge.setStyleSheet(
+                        f"background-color: {BADGE_GRAY_BG}; color: {BADGE_GRAY_FG}; "
+                        "font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 5px;"
+                    )
+
+                status_layout.addWidget(status_badge)
+                self.students_table.setCellWidget(row, 5, status_widget)
 
                 # Action buttons
                 action_widget = QWidget()

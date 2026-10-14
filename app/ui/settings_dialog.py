@@ -50,6 +50,7 @@ from app.services.batch_service import (
     reactivate_batch,
 )
 from app.services.coaching_helper_service import (
+    APP_VERSION,
     check_for_updates,
     get_helper_process_info,
     is_windows_autostart_enabled,
@@ -405,9 +406,14 @@ class SettingsDialog(QDialog):
         p_form = QFormLayout()
         p_form.setSpacing(12)
 
+        def req_p(label_text: str) -> QLabel:
+            lbl = QLabel(f"{label_text} <span style='color: #DC2626; font-weight: bold;'>*</span>:")
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            return lbl
+
         self.gen_coaching_name_input = QLineEdit()
         self.gen_coaching_name_input.setPlaceholderText("e.g. Apex Coaching Institute")
-        p_form.addRow("Coaching Name *:", self.gen_coaching_name_input)
+        p_form.addRow(req_p("Coaching Name"), self.gen_coaching_name_input)
 
         self.gen_tagline_input = QLineEdit()
         self.gen_tagline_input.setPlaceholderText("e.g. Empowering Students Towards Excellence")
@@ -415,7 +421,7 @@ class SettingsDialog(QDialog):
 
         self.gen_academic_session_input = QLineEdit()
         self.gen_academic_session_input.setPlaceholderText("e.g. 2026–2027")
-        p_form.addRow("Academic Session / Year *:", self.gen_academic_session_input)
+        p_form.addRow(req_p("Academic Session / Year"), self.gen_academic_session_input)
 
         p_layout.addLayout(p_form)
         layout.addWidget(profile_card)
@@ -1331,7 +1337,7 @@ class SettingsDialog(QDialog):
         m_header.addWidget(m_title)
         m_header.addStretch()
 
-        self.version_lbl = QLabel("TAMS v2.0.0")
+        self.version_lbl = QLabel(f"TAMS v{APP_VERSION}")
         self.version_lbl.setStyleSheet("font-weight: 700; color: #012D54;")
         m_header.addWidget(self.version_lbl)
 

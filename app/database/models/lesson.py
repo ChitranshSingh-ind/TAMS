@@ -63,7 +63,7 @@ class Lesson(Base):
     )
 
     notes: Mapped[str | None] = mapped_column(
-        Text,
+        String(500),
         nullable=True,
     )
 

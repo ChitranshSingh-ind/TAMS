@@ -160,14 +160,20 @@ class AddStudentDialog(QDialog):
         )
         self.notes_input.setMaximumHeight(90)
 
+        # Helper for required field labels with red accent
+        def req(label_text: str) -> QLabel:
+            lbl = QLabel(f"{label_text} <span style='color: #DC2626; font-weight: bold;'>*</span>")
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            return lbl
+
         # Row for admission number with auto-generate option
         form.addRow("Admission No.", admission_row_layout)
-        form.addRow("First Name *", self.first_name_input)
+        form.addRow(req("First Name"), self.first_name_input)
         form.addRow("Last Name", self.last_name_input)
-        form.addRow("Parent Name *", self.parent_name_input)
+        form.addRow(req("Parent Name"), self.parent_name_input)
         form.addRow("Parent Phone", self.parent_phone_input)
         form.addRow("WhatsApp Number", self.whatsapp_input)
-        form.addRow("Batch *", self.batch_input)
+        form.addRow(req("Batch"), self.batch_input)
         form.addRow("Date of Birth", self.date_of_birth_input)
         form.addRow("School", self.school_input)
         form.addRow("Admission Date", self.admission_date_input)

@@ -44,6 +44,16 @@ from app.ui.table_utils import (
     auto_fit_columns,
     configure_table_ux,
 )
+from app.ui.theme import (
+    CREAM,
+    DARK_NAVY,
+    GOLD,
+    LIGHT_GOLD,
+    MUTED,
+    NAVY,
+    TEXT,
+    WHITE,
+)
 
 
 class ResultsMixin:
@@ -67,22 +77,22 @@ class ResultsMixin:
         heading_layout.setSpacing(4)
 
         title = QLabel("Results")
-        title.setStyleSheet("""
-            QLabel {
-                color: #012D54;
+        title.setStyleSheet(f"""
+            QLabel {{
+                color: {NAVY};
                 font-size: 26px;
                 font-weight: 700;
-            }
+            }}
         """)
 
         subtitle = QLabel(
             "Create tests and track student performance."
         )
-        subtitle.setStyleSheet("""
-            QLabel {
-                color: #615F4B;
+        subtitle.setStyleSheet(f"""
+            QLabel {{
+                color: {MUTED};
                 font-size: 13px;
-            }
+            }}
         """)
 
         heading_layout.addWidget(title)
@@ -92,44 +102,47 @@ class ResultsMixin:
 
         create_button = QPushButton("＋ Create Test")
         create_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        create_button.setFixedHeight(42)
-        create_button.setStyleSheet("""
-            QPushButton {
-                background: #012D54;
-                color: #FEFEFE;
-                border: none;
+        create_button.setFixedHeight(38)
+        create_button.setStyleSheet(f"""
+            QPushButton {{
+                background: {NAVY};
+                color: {WHITE};
+                border: 1px solid {NAVY};
                 border-radius: 8px;
-                padding: 10px 18px;
+                padding: 8px 18px;
+                font-size: 13px;
                 font-weight: 600;
-            }
-            QPushButton:hover {
-                background: #04294D;
-            }
+            }}
+            QPushButton:hover {{
+                background: {DARK_NAVY};
+            }}
         """)
         create_button.clicked.connect(self.create_test_dialog)
         header_layout.addWidget(create_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         check_results_button = QPushButton("Check Results")
         check_results_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        check_results_button.setFixedHeight(42)
+        check_results_button.setFixedHeight(38)
         check_results_button.setEnabled(False)
-        check_results_button.setStyleSheet("""
-            QPushButton {
-                background: #E9DEBA;
-                color: #012D54;
-                border: 1px solid #D9B85F;
+        check_results_button.setStyleSheet(f"""
+            QPushButton {{
+                background: {CREAM};
+                color: {NAVY};
+                border: 1px solid {GOLD};
                 border-radius: 8px;
-                padding: 10px 18px;
+                padding: 8px 16px;
+                font-size: 13px;
                 font-weight: 600;
-            }
-            QPushButton:hover:enabled {
-                background: #D9B85F;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover:enabled {{
+                background: {LIGHT_GOLD};
+                border-color: {NAVY};
+            }}
+            QPushButton:disabled {{
                 color: #8B887A;
                 background: #F1EBD3;
-                border-color: #E9DEBA;
-            }
+                border-color: {LIGHT_GOLD};
+            }}
         """)
         check_results_button.clicked.connect(self.check_selected_test_results)
         header_layout.addWidget(check_results_button, alignment=Qt.AlignmentFlag.AlignVCenter)

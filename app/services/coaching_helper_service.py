@@ -30,10 +30,10 @@ from app.services.messaging_service import (
     get_messaging_overview_stats,
     process_message_queue,
 )
+from app import __version__ as APP_VERSION
 
 logger = logging.getLogger("TAMS.CoachingHelperService")
 
-APP_VERSION = "2.0.0"
 HELPER_STATUS_FILE = DATA_DIR / "helper_status.json"
 HELPER_LOCK_FILE = DATA_DIR / "coaching_helper.lock"
 HELPER_CONTROL_FILE = DATA_DIR / "helper_control.json"
@@ -359,7 +359,17 @@ def check_for_updates() -> dict[str, Any]:
                 data = json.loads(resp.read().decode("utf-8"))
                 tag_name = data.get("tag_name", "").lstrip("v").strip()
                 release_notes = data.get("body", "Bug fixes and performance improvements.")
-                is_newer = tag_name > APP_VERSION if tag_name else False
+                
+                # Robust SemVer comparison
+                is_newer = False
+                if tag_name:
+                    try:
+                        from packaging.version import parse as parse_version
+                        is_newer = parse_version(tag_name) > parse_version(APP_VERSION)
+                    except Exception:
+                        cand_nums = [int(x) for x in re.findall(r"\d+", tag_name)]
+                        curr_nums = [int(x) for x in re.findall(r"\d+", APP_VERSION)]
+                        is_newer = cand_nums > curr_nums
                 return {
                     "status": "update_available" if is_newer else "up_to_date",
                     "message": f"Update {tag_name} is available." if is_newer else "You are running the latest version of TAMS.",

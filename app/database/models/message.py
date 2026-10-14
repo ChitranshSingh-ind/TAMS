@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -86,7 +87,7 @@ class Message(Base):
     # Lifecycle: QUEUED -> SENDING -> ACCEPTED -> DELIVERED / READ / FAILED / RETRY_SCHEDULED / CANCELLED
     status: Mapped[str] = mapped_column(String(30), default="QUEUED", index=True)
     provider: Mapped[str] = mapped_column(String(50), default="WHATSAPP_CLOUD")
-    provider_message_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     environment: Mapped[str] = mapped_column(String(20), default="DEVELOPMENT")  # DEVELOPMENT, PRODUCTION
 
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -109,6 +110,10 @@ class Message(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    __table_args__ = (
+        Index("ix_messages_provider_msg_id", "provider_message_id"),
+    )
+
     template: Mapped[MessageTemplate | None] = relationship("MessageTemplate", back_populates="messages")
 
 
@@ -121,7 +126,7 @@ class NotificationRule(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
-    trigger_event: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    trigger_event: Mapped[str] = mapped_column(String(50), nullable=False)
     # Events: FEE_DUE, FEE_OVERDUE, PAYMENT_RECEIPT, ABSENCE, CONSECUTIVE_ABSENCE, TEST_RESULT
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=False)  # MUST BE FALSE BY DEFAULT
 
@@ -149,6 +154,10 @@ class NotificationRule(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    __table_args__ = (
+        Index("ix_notif_rules_trigger", "trigger_event"),
+    )
+
 
 class RecipientPreference(Base):
     """
@@ -157,7 +166,7 @@ class RecipientPreference(Base):
     __tablename__ = "recipient_preferences"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    phone_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
+    phone_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     student_id: Mapped[int | None] = mapped_column(
         ForeignKey("students.id", ondelete="SET NULL"),
         nullable=True,
@@ -182,6 +191,10 @@ class RecipientPreference(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (
+        Index("ix_recipient_pref_phone", "phone_number"),
     )
 
 

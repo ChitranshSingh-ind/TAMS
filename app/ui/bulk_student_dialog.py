@@ -300,7 +300,8 @@ class BulkStudentDialog(QDialog):
         t_batch_layout.setContentsMargins(8, 8, 8, 8)
 
         dest_row = QHBoxLayout()
-        dest_lbl = QLabel("Target Destination Batch *:")
+        dest_lbl = QLabel("Target Destination Batch <span style='color: #DC2626; font-weight: bold;'>*</span>:")
+        dest_lbl.setTextFormat(Qt.TextFormat.RichText)
         dest_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
         self.target_batch_combo = QComboBox()
         self.target_batch_combo.setFixedHeight(34)
@@ -328,7 +329,8 @@ class BulkStudentDialog(QDialog):
         t_status_layout.setContentsMargins(8, 8, 8, 8)
 
         stat_row = QHBoxLayout()
-        stat_lbl = QLabel("New Lifecycle Status *:")
+        stat_lbl = QLabel("New Lifecycle Status <span style='color: #DC2626; font-weight: bold;'>*</span>:")
+        stat_lbl.setTextFormat(Qt.TextFormat.RichText)
         stat_lbl.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
         self.target_status_combo = QComboBox()
         self.target_status_combo.setFixedHeight(34)

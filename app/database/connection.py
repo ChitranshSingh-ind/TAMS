@@ -54,8 +54,25 @@ def configure_sqlite_connection(dbapi_connection, connection_record):
     cursor.close()
 
 
-SessionLocal = sessionmaker(
+# Factory instance for database sessions
+_session_factory = sessionmaker(
     bind=engine,
     autoflush=False,
     autocommit=False,
 )
+
+
+class _SessionProxy:
+    """
+    Proxy callable so any module that imported `SessionLocal` at import time
+    dynamically uses the latest underlying session factory, preventing test runs
+    from writing to the authentic database when engines are reconfigured.
+    """
+    def __call__(self, *args, **kwargs):
+        return _session_factory(*args, **kwargs)
+
+    def configure(self, **kwargs):
+        return _session_factory.configure(**kwargs)
+
+
+SessionLocal = _SessionProxy()

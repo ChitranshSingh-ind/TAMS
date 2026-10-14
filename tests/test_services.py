@@ -302,3 +302,33 @@ def test_create_and_delete_test():
         assert success is True
         assert len(get_tests(session, batch_id=batch.id)) == 0
         assert len(get_test_results(session, test.id)) == 0
+
+
+def test_generate_next_admission_number():
+    from datetime import date
+    from app.services.student_service import generate_next_admission_number
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    current_year = date.today().year
+
+    with Session() as session:
+        batch = create_batch(session, "Class 10-A")
+
+        # When database has no students, starts at ADM-{year}-0001
+        adm_1 = generate_next_admission_number(session, prefix="ADM")
+        assert adm_1 == f"ADM-{current_year}-0001"
+
+        # Create student with this number
+        create_student(session, admission_number=adm_1, first_name="Student 1", batch_id=batch.id)
+
+        # Next admission number should increment to 0002
+        adm_2 = generate_next_admission_number(session, prefix="ADM")
+        assert adm_2 == f"ADM-{current_year}-0002"
+
+        # If a custom admission number with higher sequence exists, respect sequence
+        create_student(session, admission_number=f"ADM-{current_year}-0005", first_name="Student 5", batch_id=batch.id)
+        adm_next = generate_next_admission_number(session, prefix="ADM")
+        assert adm_next == f"ADM-{current_year}-0006"

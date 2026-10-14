@@ -28,6 +28,7 @@ from app.services.batch_service import get_active_batches
 from app.services.fee_service import get_student_fee_summary, get_student_fees
 from app.services.student_service import (
     create_student_with_parent,
+    generate_next_admission_number,
     get_student,
     get_students_by_batch,
     update_student_with_parent,
@@ -360,12 +361,20 @@ class StudentsMixin:
 
 
     def open_add_student_dialog(self):
+        """
+        Open the student registration modal dialog.
+        
+        Fetches active batches and autogenerates the next sequential admission
+        number to suggest by default, while allowing custom overrides.
+        """
         with SessionLocal() as session:
             batches = get_active_batches(session)
+            suggested_admission_no = generate_next_admission_number(session)
 
         dialog = AddStudentDialog(
             batches=batches,
             parent=self,
+            default_admission_number=suggested_admission_no,
         )
 
         if dialog.exec() != QDialog.DialogCode.Accepted:

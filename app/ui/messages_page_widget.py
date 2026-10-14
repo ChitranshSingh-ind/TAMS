@@ -604,7 +604,12 @@ class MessagesPageWidget(QWidget):
                     target_ids = [bid]
             elif mode == "STUDENT":
                 for row in range(self.compose_students_table.rowCount()):
-                    cb: QCheckBox = self.compose_students_table.cellWidget(row, 0)
+                    # 1. Get the generic layout container widget from the cell
+                    cell_widget = self.compose_students_table.cellWidget(row, 0)
+                    
+                    # 2. Extract the actual QCheckBox nested inside it
+                    cb = cell_widget.findChild(QCheckBox) if cell_widget else None
+
                     if cb and cb.isChecked():
                         s_id = self.compose_students_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
                         if s_id:

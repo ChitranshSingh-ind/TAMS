@@ -39,7 +39,7 @@ def isolate_test_database():
             connect_args={"timeout": 30.0},
         )
         conn.engine = new_engine
-        conn.SessionLocal = sessionmaker(bind=new_engine, autoflush=False, autocommit=False)
+        conn._session_factory = sessionmaker(bind=new_engine, autoflush=False, autocommit=False)
 
         # Create all tables on the isolated database
         from app.database.base import Base

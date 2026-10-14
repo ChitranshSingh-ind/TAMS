@@ -106,9 +106,24 @@ def test_students_page_and_profile_dialog(qapp, sample_data, monkeypatch):
     assert win.students_table.horizontalHeaderItem(0).text() == "Admission No."
     assert win.students_table.horizontalHeaderItem(1).text() == "Student Name"
 
-    # Test AddStudentDialog
-    add_dialog = AddStudentDialog(batches=[], parent=win)
+    # Test AddStudentDialog with auto-generate and custom toggle
+    add_dialog = AddStudentDialog(batches=[], parent=win, default_admission_number="ADM-2026-0001")
     assert add_dialog.admission_number_input is not None
+    assert add_dialog.auto_generate_admission_cb.isChecked() is True
+    assert add_dialog.admission_number_input.isReadOnly() is True
+    assert add_dialog.admission_number_input.text() == "ADM-2026-0001"
+
+    # Toggle to custom mode
+    add_dialog.auto_generate_admission_cb.setChecked(False)
+    assert add_dialog.admission_number_input.isReadOnly() is False
+    add_dialog.admission_number_input.setText("CUSTOM-999")
+    assert add_dialog.admission_number_input.text() == "CUSTOM-999"
+
+    # Toggle back to auto-generate mode
+    add_dialog.auto_generate_admission_cb.setChecked(True)
+    assert add_dialog.admission_number_input.isReadOnly() is True
+    assert add_dialog.admission_number_input.text() == "ADM-2026-0001"
+
     assert add_dialog.first_name_input is not None
 
     # Test student profile dialog (mocking exec to avoid blocking)

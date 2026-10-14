@@ -1,8 +1,77 @@
+import re
+from datetime import date
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.database.models.student import Student
 from app.database.models.parent import Parent
+
+
+def generate_next_admission_number(session: Session, prefix: str = "ADM") -> str:
+    """
+    Generate the next unique, sequential admission number for a student.
+
+    Looks up existing admission numbers in the database to find the highest
+    sequence index for the current year or matching prefix, and increments it.
+    If numbers exist with pattern {PREFIX}-{YYYY}-{INDEX:04d} or {PREFIX}{INDEX},
+    it calculates the next unused number. Guarantees that the returned number
+    does not collide with any existing record in the database.
+
+    Args:
+        session: Active SQLAlchemy database session.
+        prefix: Institutional prefix for the admission number (defaults to 'ADM').
+
+    Returns:
+        A unique string admission number, e.g., 'ADM-2026-0001'.
+    """
+    current_year = date.today().year
+    year_prefix = f"{prefix}-{current_year}-"
+
+    # Query all non-empty admission numbers from the database
+    existing_numbers = set(
+        session.scalars(
+            select(Student.admission_number).where(
+                Student.admission_number.isnot(None)
+            )
+        ).all()
+    )
+
+    # First attempt: find highest numeric suffix matching ADM-{year}-XXXX
+    max_seq = 0
+    pattern_year = re.compile(rf"^{re.escape(prefix)}-{current_year}-(\d+)$", re.IGNORECASE)
+    pattern_generic = re.compile(r"(\d+)$")
+
+    for adm in existing_numbers:
+        match_year = pattern_year.match(adm)
+        if match_year:
+            try:
+                seq = int(match_year.group(1))
+                if seq > max_seq:
+                    max_seq = seq
+            except ValueError:
+                pass
+
+    # If no year-based admission numbers found, inspect total count or generic numbers
+    if max_seq == 0:
+        # Check any numbers with digits to establish sensible sequence start
+        for adm in existing_numbers:
+            match_gen = pattern_generic.search(adm)
+            if match_gen:
+                try:
+                    seq = int(match_gen.group(1))
+                    if 0 < seq < 100000 and seq > max_seq:
+                        max_seq = seq
+                except ValueError:
+                    pass
+
+    # Increment and find the first non-colliding admission number
+    candidate_seq = max_seq + 1
+    while True:
+        candidate = f"{year_prefix}{candidate_seq:04d}"
+        if candidate not in existing_numbers:
+            return candidate
+        candidate_seq += 1
+
 
 
 def create_student(

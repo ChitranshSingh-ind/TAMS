@@ -19,6 +19,7 @@ from app.ui.fee_dialogs import (
 )
 from app.ui.main_window import MainWindow
 from app.ui.add_student_dialog import AddStudentDialog
+from app.ui.bulk_student_dialog import BulkStudentDialog
 from app.ui.settings_dialog import SettingsDialog
 
 
@@ -194,3 +195,52 @@ def test_settings_dialog(qapp):
     win = MainWindow()
     settings = SettingsDialog(parent=win)
     assert settings.settings_menu.count() >= 4
+
+
+def test_bulk_student_dialog(qapp, sample_data, monkeypatch):
+    win = MainWindow()
+    win.change_page(1)
+    assert hasattr(win, "bulk_actions_button")
+
+    with SessionLocal() as session:
+        from app.services.batch_service import get_active_batches
+        batches = get_active_batches(session)
+
+    dialog = BulkStudentDialog(batches=batches, initial_batch_id=sample_data["batch_id"], parent=win)
+    assert dialog.table.columnCount() == 4
+    assert dialog.table.rowCount() >= 1
+
+    # Test selection
+    dialog._select_all_visible()
+    selected_ids = dialog._get_selected_student_ids()
+    assert len(selected_ids) >= 1
+
+    dialog._deselect_all()
+    assert len(dialog._get_selected_student_ids()) == 0
+
+    # Select all again
+    dialog._select_all_visible()
+    assert len(dialog._get_selected_student_ids()) >= 1
+
+    # Test tab navigation
+    assert dialog.tab_widget.count() == 2
+    dialog.tab_widget.setCurrentIndex(0)
+    assert "Promote" in dialog.tab_widget.tabText(0)
+    dialog.tab_widget.setCurrentIndex(1)
+    assert "Status" in dialog.tab_widget.tabText(1)
+
+    # Test filtering
+    dialog.search_input.setText("NonExistentStudentNameXYZ")
+    assert dialog.table.isRowHidden(0) is True
+    dialog.search_input.clear()
+    assert dialog.table.isRowHidden(0) is False
+
+    # Mock dialog exec and question prompts to test apply changes
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
+    monkeypatch.setattr(QDialog, "accept", lambda self: None)
+
+    # Test bulk status apply
+    dialog.tab_widget.setCurrentIndex(1)
+    dialog._on_apply_clicked()
+

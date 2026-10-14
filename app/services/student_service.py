@@ -1,10 +1,11 @@
 import re
 from datetime import date
-from sqlalchemy import select, func
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.database.models.student import Student
+from app.database.models.batch import Batch
 from app.database.models.parent import Parent
+from app.database.models.student import Student
 
 
 def generate_next_admission_number(session: Session, prefix: str = "ADM") -> str:
@@ -352,3 +353,135 @@ def update_student_with_parent(
     session.commit()
     session.refresh(student)
     return student
+
+
+def bulk_update_student_batch(
+    session: Session,
+    student_ids: list[int],
+    new_batch_id: int,
+) -> int:
+    """
+    Update the enrolled batch for multiple students simultaneously.
+
+    Transfers a group of students into a new batch while preserving their
+    individual IDs, profile information, and historical records.
+
+    Args:
+        session: Active SQLAlchemy database session.
+        student_ids: List of student primary key IDs to transfer.
+        new_batch_id: Target batch primary key ID.
+
+    Returns:
+        The total count of student records updated.
+
+    Raises:
+        ValueError: If target batch does not exist.
+    """
+    if not student_ids:
+        return 0
+
+    target_batch = session.get(Batch, new_batch_id)
+    if target_batch is None:
+        raise ValueError(f"Target batch with ID {new_batch_id} does not exist.")
+
+    statement = (
+        update(Student)
+        .where(Student.id.in_(student_ids))
+        .values(batch_id=new_batch_id)
+    )
+    result = session.execute(statement)
+    session.commit()
+    return result.rowcount
+
+
+def bulk_update_student_status(
+    session: Session,
+    student_ids: list[int],
+    new_status: str,
+) -> int:
+    """
+    Update the enrollment lifecycle status for multiple students simultaneously.
+
+    Supports transitioning student cohorts between active study, temporary
+    inactivity, or graduation alumni status.
+
+    Args:
+        session: Active SQLAlchemy database session.
+        student_ids: List of student primary key IDs.
+        new_status: Desired lifecycle status ('ACTIVE', 'INACTIVE', or 'ALUMNI').
+
+    Returns:
+        The total count of student records updated.
+
+    Raises:
+        ValueError: If new_status is not a recognized lifecycle status.
+    """
+    if not student_ids:
+        return 0
+
+    normalized_status = new_status.strip().upper()
+    valid_statuses = {"ACTIVE", "INACTIVE", "ALUMNI"}
+    if normalized_status not in valid_statuses:
+        raise ValueError(
+            f"Invalid status '{new_status}'. Allowed values are: {sorted(list(valid_statuses))}"
+        )
+
+    statement = (
+        update(Student)
+        .where(Student.id.in_(student_ids))
+        .values(status=normalized_status)
+    )
+    result = session.execute(statement)
+    session.commit()
+    return result.rowcount
+
+
+def bulk_update_students(
+    session: Session,
+    student_ids: list[int],
+    *,
+    new_batch_id: int | None = None,
+    new_status: str | None = None,
+) -> int:
+    """
+    Update both batch assignment and/or lifecycle status for multiple students in a single transaction.
+
+    Args:
+        session: Active SQLAlchemy database session.
+        student_ids: List of student primary key IDs.
+        new_batch_id: Optional new target batch primary key ID.
+        new_status: Optional new lifecycle status ('ACTIVE', 'INACTIVE', 'ALUMNI').
+
+    Returns:
+        The count of updated student records.
+    """
+    if not student_ids:
+        return 0
+
+    values_to_update = {}
+    if new_batch_id is not None:
+        target_batch = session.get(Batch, new_batch_id)
+        if target_batch is None:
+            raise ValueError(f"Target batch with ID {new_batch_id} does not exist.")
+        values_to_update["batch_id"] = new_batch_id
+
+    if new_status is not None:
+        normalized_status = new_status.strip().upper()
+        valid_statuses = {"ACTIVE", "INACTIVE", "ALUMNI"}
+        if normalized_status not in valid_statuses:
+            raise ValueError(
+                f"Invalid status '{new_status}'. Allowed values are: {sorted(list(valid_statuses))}"
+            )
+        values_to_update["status"] = normalized_status
+
+    if not values_to_update:
+        return 0
+
+    statement = (
+        update(Student)
+        .where(Student.id.in_(student_ids))
+        .values(**values_to_update)
+    )
+    result = session.execute(statement)
+    session.commit()
+    return result.rowcount

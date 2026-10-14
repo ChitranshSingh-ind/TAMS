@@ -35,6 +35,7 @@ from app.services.student_service import (
 )
 from app.services.test_service import get_student_results
 from app.ui.add_student_dialog import AddStudentDialog
+from app.ui.bulk_student_dialog import BulkStudentDialog
 from app.ui.fee_dialogs import MONTH_NAMES
 from app.ui.table_utils import (
     TableSizingStrategy,
@@ -79,6 +80,15 @@ class StudentsMixin:
 
         header_layout.addLayout(title_box)
         header_layout.addStretch()
+
+        # Bulk actions button
+        self.bulk_actions_button = QPushButton("👥 Bulk Actions")
+        self.bulk_actions_button.setObjectName("bulkActionsButton")
+        self.bulk_actions_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+        self.bulk_actions_button.clicked.connect(self.open_bulk_student_dialog)
+        header_layout.addWidget(self.bulk_actions_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         # Add student button
         add_student_button = QPushButton("+ Add Student")
@@ -358,7 +368,30 @@ class StudentsMixin:
 
         auto_fit_columns(self.students_table)
 
+    def open_bulk_student_dialog(self):
+        """
+        Open the modal dialog for bulk student operations (batch promotion and status update).
+        """
+        with SessionLocal() as session:
+            batches = get_active_batches(session)
 
+        current_batch_id = (
+            self.batch_selector.currentData()
+            if hasattr(self, "batch_selector")
+            else None
+        )
+
+        dialog = BulkStudentDialog(
+            batches=batches,
+            initial_batch_id=current_batch_id,
+            parent=self,
+        )
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Refresh students roster and dashboard metrics
+            self.load_students()
+            if hasattr(self, "refresh_dashboard"):
+                self.refresh_dashboard()
 
     def open_add_student_dialog(self):
         """

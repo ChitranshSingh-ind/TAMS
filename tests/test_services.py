@@ -332,3 +332,61 @@ def test_generate_next_admission_number():
         create_student(session, admission_number=f"ADM-{current_year}-0005", first_name="Student 5", batch_id=batch.id)
         adm_next = generate_next_admission_number(session, prefix="ADM")
         assert adm_next == f"ADM-{current_year}-0006"
+
+
+def test_bulk_student_operations():
+    from app.services.student_service import (
+        bulk_update_student_batch,
+        bulk_update_student_status,
+        bulk_update_students,
+    )
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    with Session() as session:
+        batch_a = create_batch(session, "Batch 10A")
+        batch_b = create_batch(session, "Batch 11B")
+
+        s1 = create_student(session, admission_number="A1", first_name="Alice", batch_id=batch_a.id)
+        s2 = create_student(session, admission_number="A2", first_name="Bob", batch_id=batch_a.id)
+        s3 = create_student(session, admission_number="A3", first_name="Charlie", batch_id=batch_a.id)
+
+        # Bulk transfer s1 and s2 to Batch 11B
+        updated = bulk_update_student_batch(session, [s1.id, s2.id], batch_b.id)
+        assert updated == 2
+
+        session.refresh(s1)
+        session.refresh(s2)
+        session.refresh(s3)
+        assert s1.batch_id == batch_b.id
+        assert s2.batch_id == batch_b.id
+        assert s3.batch_id == batch_a.id
+
+        # Bulk status update
+        status_updated = bulk_update_student_status(session, [s1.id, s3.id], "ALUMNI")
+        assert status_updated == 2
+
+        session.refresh(s1)
+        session.refresh(s3)
+        assert s1.status == "ALUMNI"
+        assert s3.status == "ALUMNI"
+
+        # Bulk update both batch and status
+        combined = bulk_update_students(session, [s3.id], new_batch_id=batch_b.id, new_status="ACTIVE")
+        assert combined == 1
+        session.refresh(s3)
+        assert s3.batch_id == batch_b.id
+        assert s3.status == "ACTIVE"
+
+        # Edge cases: empty list, invalid status, invalid batch
+        assert bulk_update_student_batch(session, [], batch_b.id) == 0
+        assert bulk_update_student_status(session, [], "ACTIVE") == 0
+
+        import pytest
+        with pytest.raises(ValueError, match="does not exist"):
+            bulk_update_student_batch(session, [s1.id], 99999)
+
+        with pytest.raises(ValueError, match="Invalid status"):
+            bulk_update_student_status(session, [s1.id], "INVALID_STATUS")

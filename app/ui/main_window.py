@@ -761,6 +761,25 @@ class MainWindow(
                 font-size: 13px;
             }}
 
+            #bulkActionsButton {{
+                background: {CREAM};
+                color: {NAVY};
+                border: 1px solid {GOLD};
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+
+            #bulkActionsButton:hover {{
+                background: {LIGHT_GOLD};
+                border-color: {NAVY};
+            }}
+
+            #bulkActionsButton:pressed {{
+                background: #D9B85F;
+            }}
+
             #addStudentButton {{
                 background: {NAVY};
                 color: {WHITE};

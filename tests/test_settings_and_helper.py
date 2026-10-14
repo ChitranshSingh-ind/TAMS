@@ -269,3 +269,51 @@ def test_settings_dialog_helper_controls(qapp):
 
     with mock.patch("app.ui.settings_dialog.restart_helper_process"):
         dialog._on_restart_helper_clicked()
+
+
+def test_check_for_updates_asset_extraction():
+    mock_cm = mock.MagicMock()
+    mock_cm.__enter__.return_value.status = 200
+    mock_cm.__enter__.return_value.read.return_value = json.dumps({
+        "tag_name": "v2.5.0",
+        "body": "New version with bulk promotion and auto-updates.",
+        "html_url": "https://github.com/ChitranshSingh-ind/TAMS/releases/tag/v2.5.0",
+        "assets": [
+            {
+                "name": "TAMS_Setup_v2.5.0.exe",
+                "size": 52428800,
+                "browser_download_url": "https://github.com/ChitranshSingh-ind/TAMS/releases/download/v2.5.0/TAMS_Setup_v2.5.0.exe",
+            }
+        ]
+    }).encode("utf-8")
+
+    with mock.patch("urllib.request.urlopen", return_value=mock_cm):
+        res = check_for_updates()
+        assert res.get("status") == "update_available"
+        assert res.get("latest_version") == "2.5.0"
+        assert res.get("download_url") == "https://github.com/ChitranshSingh-ind/TAMS/releases/download/v2.5.0/TAMS_Setup_v2.5.0.exe"
+        assert res.get("asset_name") == "TAMS_Setup_v2.5.0.exe"
+        assert res.get("asset_size") == 52428800
+
+
+def test_app_update_dialog_ui(qapp):
+    from app.ui.app_update_dialog import AppUpdateDialog
+
+    update_info = {
+        "status": "update_available",
+        "message": "Update v2.5.0 is available.",
+        "current_version": "2.0.0",
+        "latest_version": "2.5.0",
+        "release_notes": "Changelog:\n- Auto-updater",
+        "release_url": "https://github.com/ChitranshSingh-ind/TAMS/releases/tag/v2.5.0",
+        "download_url": "https://github.com/ChitranshSingh-ind/TAMS/releases/download/v2.5.0/TAMS_Setup_v2.5.0.exe",
+        "asset_name": "TAMS_Setup_v2.5.0.exe",
+        "asset_size": 52428800,
+    }
+
+    dlg = AppUpdateDialog(update_info)
+    assert dlg.windowTitle() == "Update Available - TAMS v2.5.0"
+    assert "Changelog" in dlg.notes_edit.toPlainText()
+    assert dlg.update_btn.isEnabled()
+    assert dlg.cancel_btn.text() == "Remind Me Later"
+

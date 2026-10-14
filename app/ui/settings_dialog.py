@@ -1487,14 +1487,36 @@ class SettingsDialog(QDialog):
                 QMessageBox.warning(self, "Error", f"Failed to delete backup file: {e}")
 
     def _on_check_updates_clicked(self):
-        res = check_for_updates()
-        QMessageBox.information(
-            self,
-            "Check for Updates",
-            f"ℹ️ {res.get('message')}\n\n"
-            f"Current Version: {res.get('current_version')}\n"
-            f"Latest Version: {res.get('latest_version')}",
-        )
+        self.check_updates_btn.setEnabled(False)
+        self.check_updates_btn.setText("⏳ Checking...")
+
+        self._update_worker = UpdateCheckWorker()
+
+        def _on_check_finished(res):
+            self.check_updates_btn.setEnabled(True)
+            self.check_updates_btn.setText("🔄 Check for Updates")
+
+            if res.get("status") == "update_available":
+                from app.ui.app_update_dialog import AppUpdateDialog
+                dlg = AppUpdateDialog(res, parent=self)
+                dlg.exec()
+            elif res.get("status") == "error":
+                QMessageBox.warning(
+                    self,
+                    "Update Check",
+                    f"Could not connect to update server:\n{res.get('message', 'Network error')}",
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Check for Updates",
+                    f"✅ {res.get('message', 'You are running the latest version of TAMS.')}\n\n"
+                    f"Installed Version: v{res.get('current_version')}\n"
+                    f"Latest Version: v{res.get('latest_version')}",
+                )
+
+        self._update_worker.finished.connect(_on_check_finished)
+        self._update_worker.start()
 
     def _on_start_helper_clicked(self):
         self.helper_start_btn.setEnabled(False)

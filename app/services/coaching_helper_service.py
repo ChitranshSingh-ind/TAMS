@@ -360,6 +360,8 @@ def check_for_updates() -> dict[str, Any]:
                 tag_name = data.get("tag_name", "").lstrip("v").strip()
                 release_notes = data.get("body", "Bug fixes and performance improvements.")
                 
+                release_url = data.get("html_url", "https://github.com/ChitranshSingh-ind/TAMS/releases/latest")
+                
                 # Robust SemVer comparison
                 is_newer = False
                 if tag_name:
@@ -370,14 +372,39 @@ def check_for_updates() -> dict[str, Any]:
                         cand_nums = [int(x) for x in re.findall(r"\d+", tag_name)]
                         curr_nums = [int(x) for x in re.findall(r"\d+", APP_VERSION)]
                         is_newer = cand_nums > curr_nums
+
+                # Extract release assets (.exe installer prioritized)
+                assets = data.get("assets", []) or []
+                download_url = None
+                asset_name = None
+                asset_size = 0
+
+                for asset in assets:
+                    name = asset.get("name", "")
+                    if name.lower().endswith(".exe"):
+                        download_url = asset.get("browser_download_url")
+                        asset_name = name
+                        asset_size = asset.get("size", 0)
+                        break
+
+                if not download_url and assets:
+                    first_asset = assets[0]
+                    download_url = first_asset.get("browser_download_url")
+                    asset_name = first_asset.get("name")
+                    asset_size = first_asset.get("size", 0)
+
                 return {
                     "status": "update_available" if is_newer else "up_to_date",
-                    "message": f"Update {tag_name} is available." if is_newer else "You are running the latest version of TAMS.",
+                    "message": f"Update v{tag_name} is available." if is_newer else "You are running the latest version of TAMS.",
                     "current_version": APP_VERSION,
                     "latest_version": tag_name or APP_VERSION,
                     "is_up_to_date": not is_newer,
                     "checked_at": datetime.now(timezone.utc).isoformat(),
                     "release_notes": release_notes,
+                    "release_url": release_url,
+                    "download_url": download_url,
+                    "asset_name": asset_name or (f"TAMS_Setup_v{tag_name}.exe" if tag_name else None),
+                    "asset_size": asset_size,
                 }
     except Exception as e:
         logger.debug("Update check returned offline/fallback: %s", e)
@@ -391,6 +418,10 @@ def check_for_updates() -> dict[str, Any]:
         "is_up_to_date": True,
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "release_notes": "TAMS v2.0 - Coaching Intelligence, WhatsApp Integration & Analytics Suite.",
+        "release_url": "https://github.com/ChitranshSingh-ind/TAMS/releases/latest",
+        "download_url": None,
+        "asset_name": None,
+        "asset_size": 0,
     }
 
 

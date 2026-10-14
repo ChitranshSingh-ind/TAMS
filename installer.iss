@@ -50,5 +50,5 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TAMS CoachingHelper"; ValueData: """{app}\{#MyHelperExeName}"""; Flags: uninsdeletevalue; Tasks: autostarthelper
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
 Filename: "{app}\{#MyHelperExeName}"; Description: "Start CoachingHelper companion in system tray"; Flags: nowait postinstall skipifsilent; Tasks: autostarthelper

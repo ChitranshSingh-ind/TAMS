@@ -40,14 +40,18 @@ from app.services.lesson_service import (
     get_lessons,
 )
 
-NAVY = "#012D54"
-DARK_NAVY = "#04294D"
-GOLD = "#D9B85F"
-LIGHT_GOLD = "#E9DEBA"
-CREAM = "#F8F6EA"
-WHITE = "#FEFEFE"
-TEXT = "#1F2937"
-MUTED = "#615F4B"
+from app.ui.theme import (
+    CHEVRON_DOWN_DISABLED_PATH,
+    CHEVRON_DOWN_PATH,
+    CREAM,
+    DARK_NAVY,
+    GOLD,
+    LIGHT_GOLD,
+    MUTED,
+    NAVY,
+    TEXT,
+    WHITE,
+)
 
 
 def _qdate(d: date) -> QDate:
@@ -81,9 +85,28 @@ def _dialog_style() -> str:
     return f"""
         QDialog {{ background: {CREAM}; }}
         QLabel {{ color: {NAVY}; font-size: 13px; }}
-        QLineEdit, QTextEdit, QComboBox, QSpinBox, QDateEdit {{
+        QLineEdit, QTextEdit, QSpinBox, QDateEdit {{
             background: {WHITE}; border: 1px solid {LIGHT_GOLD};
             border-radius: 6px; padding: 6px 10px; font-size: 13px; color: {TEXT};
+        }}
+        QComboBox {{
+            background: {WHITE}; border: 1px solid {LIGHT_GOLD};
+            border-radius: 6px; padding: 6px 28px 6px 10px; font-size: 13px; color: {TEXT};
+        }}
+        QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 24px;
+            border: none;
+        }}
+        QComboBox::down-arrow {{
+            image: url("{CHEVRON_DOWN_PATH}");
+            width: 12px;
+            height: 12px;
+            margin-right: 8px;
+        }}
+        QComboBox::down-arrow:disabled {{
+            image: url("{CHEVRON_DOWN_DISABLED_PATH}");
         }}
         QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDateEdit:focus {{
             border: 1.5px solid {NAVY};

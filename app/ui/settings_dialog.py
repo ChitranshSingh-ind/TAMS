@@ -79,14 +79,16 @@ from app.ui.table_utils import TableSizingStrategy, auto_fit_columns, configure_
 
 
 from app.ui.theme import (
-    NAVY,
+    CHEVRON_DOWN_DISABLED_PATH,
+    CHEVRON_DOWN_PATH,
+    CREAM,
     DARK_NAVY,
     GOLD,
     LIGHT_GOLD,
-    CREAM,
-    WHITE,
-    TEXT,
     MUTED,
+    NAVY,
+    TEXT,
+    WHITE,
 )
 class TAMSTimeEdit(QTimeEdit):
     def __init__(self, parent=None):
@@ -1912,13 +1914,40 @@ class SettingsDialog(QDialog):
         }}
 
         /* ── Inputs & Focus ── */
-        QLineEdit, QTextEdit, QSpinBox, QTimeEdit, QComboBox {{
+        QLineEdit, QTextEdit, QSpinBox, QTimeEdit {{
             background: {WHITE};
             color: {TEXT};
             border: 1px solid {GOLD};
             border-radius: 6px;
             padding: 6px 10px;
             font-size: 13px;
+        }}
+
+        QComboBox {{
+            background: {WHITE};
+            color: {TEXT};
+            border: 1px solid {GOLD};
+            border-radius: 6px;
+            padding: 6px 28px 6px 10px;
+            font-size: 13px;
+        }}
+
+        QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 24px;
+            border: none;
+        }}
+
+        QComboBox::down-arrow {{
+            image: url("{CHEVRON_DOWN_PATH}");
+            width: 12px;
+            height: 12px;
+            margin-right: 8px;
+        }}
+
+        QComboBox::down-arrow:disabled {{
+            image: url("{CHEVRON_DOWN_DISABLED_PATH}");
         }}
 
         QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QTimeEdit:focus, QComboBox:focus {{

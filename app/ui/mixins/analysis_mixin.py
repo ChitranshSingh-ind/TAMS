@@ -98,17 +98,6 @@ class AnalysisMixin:
         self.analysis_batch_filter.setFixedHeight(38)
         self.analysis_batch_filter.setMinimumWidth(140)
         self.analysis_batch_filter.addItem("All Batches", None)
-        self.analysis_batch_filter.setStyleSheet("""
-            QComboBox {
-                background: #FEFEFE;
-                color: #012D54;
-                border: 1px solid #E9DEBA;
-                border-radius: 6px;
-                padding: 4px 10px;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
         self.analysis_batch_filter.currentIndexChanged.connect(self.load_analysis)
         header_layout.addWidget(self.analysis_batch_filter)
 
@@ -120,17 +109,6 @@ class AnalysisMixin:
         self.analysis_period_filter.addItem("Last 30 Days", "30D")
         self.analysis_period_filter.addItem("Last 90 Days", "90D")
         self.analysis_period_filter.addItem("Academic Year", "YEAR")
-        self.analysis_period_filter.setStyleSheet("""
-            QComboBox {
-                background: #FEFEFE;
-                color: #012D54;
-                border: 1px solid #E9DEBA;
-                border-radius: 6px;
-                padding: 4px 10px;
-                font-weight: 600;
-                font-size: 12px;
-            }
-        """)
         self.analysis_period_filter.currentIndexChanged.connect(self.load_analysis)
         header_layout.addWidget(self.analysis_period_filter)
 

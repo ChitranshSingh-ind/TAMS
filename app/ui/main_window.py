@@ -55,6 +55,8 @@ from app.ui.mixins import (
 )
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.theme import (
+    CHEVRON_DOWN_DISABLED_PATH,
+    CHEVRON_DOWN_PATH,
     CREAM,
     DARK_NAVY,
     GOLD,
@@ -416,20 +418,27 @@ class MainWindow(
                 color: {NAVY};
                 border: 1px solid {GOLD};
                 border-radius: 7px;
-                padding: 6px 12px;
+                padding: 6px 28px 6px 12px;
                 font-size: 13px;
                 font-weight: 500;
             }}
 
             #batchSelector::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
                 border: none;
-                width: 0px;
             }}
 
             #batchSelector::down-arrow {{
-                image: none;
-                width: 0px;
-                height: 0px;
+                image: url("{CHEVRON_DOWN_PATH}");
+                width: 12px;
+                height: 12px;
+                margin-right: 8px;
+            }}
+
+            #batchSelector::down-arrow:disabled {{
+                image: url("{CHEVRON_DOWN_DISABLED_PATH}");
             }}
 
             #batchSelector QAbstractItemView {{
@@ -484,6 +493,12 @@ class MainWindow(
                 border: 2px solid {NAVY};
             }}
 
+            QComboBox:disabled {{
+                background: {CREAM};
+                color: {MUTED};
+                border: 1px solid {LIGHT_GOLD};
+            }}
+
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
@@ -492,12 +507,14 @@ class MainWindow(
             }}
 
             QComboBox::down-arrow {{
-                width: 0px;
-                height: 0px;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid {NAVY};
+                image: url("{CHEVRON_DOWN_PATH}");
+                width: 12px;
+                height: 12px;
                 margin-right: 8px;
+            }}
+
+            QComboBox::down-arrow:disabled {{
+                image: url("{CHEVRON_DOWN_DISABLED_PATH}");
             }}
 
             QComboBox QAbstractItemView {{
@@ -1081,7 +1098,6 @@ class MainWindow(
 
             QDialog QLineEdit,
             QDialog QTextEdit,
-            QDialog QComboBox,
             QDialog QDateEdit,
             QDialog QSpinBox,
             QDialog QDoubleSpinBox,
@@ -1092,6 +1108,33 @@ class MainWindow(
                 border-radius: 7px;
                 padding: 7px 11px;
                 font-size: 13px;
+            }}
+
+            QDialog QComboBox {{
+                background: {WHITE};
+                color: {TEXT};
+                border: 1px solid {GOLD};
+                border-radius: 7px;
+                padding: 7px 28px 7px 11px;
+                font-size: 13px;
+            }}
+
+            QDialog QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
+                border: none;
+            }}
+
+            QDialog QComboBox::down-arrow {{
+                image: url("{CHEVRON_DOWN_PATH}");
+                width: 12px;
+                height: 12px;
+                margin-right: 8px;
+            }}
+
+            QDialog QComboBox::down-arrow:disabled {{
+                image: url("{CHEVRON_DOWN_DISABLED_PATH}");
             }}
 
             QDialog QLineEdit:focus,

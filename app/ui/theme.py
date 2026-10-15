@@ -3,6 +3,9 @@ TAMS Design System & Palette Constants.
 Provides consistent colors, typography tokens, and shared stylesheet definitions.
 """
 
+from pathlib import Path
+import sys
+
 NAVY = "#012D54"
 DARK_NAVY = "#04294D"
 GOLD = "#D9B85F"
@@ -29,3 +32,31 @@ BADGE_BLUE_FG = "#1D4ED8"
 BADGE_GRAY_BG = "#F3F4F6"
 BADGE_GRAY_FG = "#4B5563"
 
+
+def get_chevron_down_icon_path(color: str = NAVY) -> str:
+    """
+    Returns the absolute POSIX-style path to a clean SVG chevron-down icon.
+    Auto-generates and caches the SVG file if not already present.
+    """
+    if hasattr(sys, "_MEIPASS"):
+        base_dir = Path(sys._MEIPASS) / "app" / "resources" / "icons"
+    else:
+        base_dir = Path(__file__).resolve().parent.parent / "resources" / "icons"
+
+    base_dir.mkdir(parents=True, exist_ok=True)
+    slug = color.replace("#", "").lower()
+    icon_path = base_dir / f"chevron-down-{slug}.svg"
+
+    if not icon_path.exists():
+        svg_code = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" '
+            f'fill="none" stroke="{color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
+            f'<polyline points="6 9 12 15 18 9"></polyline></svg>'
+        )
+        icon_path.write_text(svg_code, encoding="utf-8")
+
+    return icon_path.as_posix()
+
+
+CHEVRON_DOWN_PATH = get_chevron_down_icon_path(NAVY)
+CHEVRON_DOWN_DISABLED_PATH = get_chevron_down_icon_path(MUTED)

@@ -259,6 +259,7 @@ def get_test_results(
     """
     statement = (
         select(TestResult)
+        .options(joinedload(TestResult.student), joinedload(TestResult.test))
         .where(TestResult.test_id == test_id)
         .order_by(TestResult.student_id)
     )

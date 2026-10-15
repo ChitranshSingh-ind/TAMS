@@ -46,6 +46,7 @@ class CoachingHelper(QThread):
         self._check_interval_seconds = 5
         self._last_heartbeat: str | None = None
         self._last_processed_count: int = 0
+        self._last_cycle_id: str | None = None
         self.worker_id = f"TAMSController_{socket.gethostname()}_{uuid.uuid4().hex[:6]}"
 
     def run(self):
@@ -77,8 +78,9 @@ class CoachingHelper(QThread):
                     state = info.get("state", "RUNNING")
                     self.status_changed.emit(f"Companion Active ({state})")
                     summary = info.get("last_cycle_summary", {})
-                    if summary and summary.get("processed", 0) > self._last_processed_count:
-                        self._last_processed_count = summary.get("processed", 0)
+                    cycle_id = summary.get("cycle_id") or summary.get("completed_at")
+                    if summary and summary.get("processed", 0) > 0 and cycle_id != self._last_cycle_id:
+                        self._last_cycle_id = cycle_id
                         self.queue_processed.emit(summary)
                 else:
                     self.status_changed.emit("Companion Inactive (On-Demand Mode)")

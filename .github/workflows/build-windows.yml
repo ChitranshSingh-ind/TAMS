@@ -23,7 +23,12 @@ jobs:
           cache: 'pip'
 
       - name: Install Inno Setup 6
-        run: choco install innosetup -y --no-progress
+        run: |
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") -and -not (Test-Path "C:\Program Files\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          } else {
+            Write-Host "Inno Setup is already installed."
+          }
 
       - name: Install Python dependencies
         run: |
@@ -31,6 +36,8 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run automated test suite
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest
 
       - name: Build binaries with PyInstaller

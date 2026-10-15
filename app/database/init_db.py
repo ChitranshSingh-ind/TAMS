@@ -31,10 +31,7 @@ def init_database() -> None:
     import app.database.models.attendance
     import app.database.models.message
 
-    logger.info("Initializing database tables and schema...")
-    Base.metadata.create_all(bind=engine)
-
-    # Run Alembic migrations or stamp head if fresh installation
+    # Inspect database for migration state before table creation
     try:
         from alembic.config import Config
         from alembic import command
@@ -53,14 +50,22 @@ def init_database() -> None:
                     res = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
                     has_revision = bool(res)
 
-            if not has_revision:
-                logger.info("Database newly created; stamping alembic_version directly to head...")
-                command.stamp(cfg, "head")
-            else:
-                logger.info("Upgrading database schema to head...")
+            if has_revision:
+                logger.info("Existing database detected; upgrading schema to head...")
                 command.upgrade(cfg, "head")
+                logger.info("Ensuring all table metadata is present...")
+                Base.metadata.create_all(bind=engine)
+            else:
+                logger.info("Fresh database detected; initializing tables and schema...")
+                Base.metadata.create_all(bind=engine)
+                logger.info("Stamping alembic_version directly to head...")
+                command.stamp(cfg, "head")
+        else:
+            logger.info("Initializing database tables and schema...")
+            Base.metadata.create_all(bind=engine)
     except Exception as e:
-        logger.debug("Alembic initialization note: %s", e)
+        logger.warning("Alembic migration warning: %s", e)
+        Base.metadata.create_all(bind=engine)
 
     # Seed essential configuration and default templates if needed
     try:

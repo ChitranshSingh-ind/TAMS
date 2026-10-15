@@ -142,6 +142,7 @@ class BulkStudentDialog(QDialog):
         self.source_status_combo.addItem("ACTIVE", "ACTIVE")
         self.source_status_combo.addItem("INACTIVE", "INACTIVE")
         self.source_status_combo.addItem("ALUMNI", "ALUMNI")
+        self.source_status_combo.addItem("LEFT", "LEFT")
         self.source_status_combo.currentIndexChanged.connect(self._apply_table_filters)
         filter_layout.addWidget(status_lbl)
         filter_layout.addWidget(self.source_status_combo)
@@ -337,6 +338,7 @@ class BulkStudentDialog(QDialog):
         self.target_status_combo.addItem("ACTIVE — Currently attending classes", "ACTIVE")
         self.target_status_combo.addItem("INACTIVE — Temporarily paused / suspended", "INACTIVE")
         self.target_status_combo.addItem("ALUMNI — Completed course / graduated", "ALUMNI")
+        self.target_status_combo.addItem("LEFT — Left institute / withdrawn", "LEFT")
 
         stat_row.addWidget(stat_lbl)
         stat_row.addWidget(self.target_status_combo, 1)

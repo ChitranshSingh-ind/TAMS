@@ -417,7 +417,7 @@ def bulk_update_student_status(
         return 0
 
     normalized_status = new_status.strip().upper()
-    valid_statuses = {"ACTIVE", "INACTIVE", "ALUMNI"}
+    valid_statuses = {"ACTIVE", "INACTIVE", "ALUMNI", "LEFT"}
     if normalized_status not in valid_statuses:
         raise ValueError(
             f"Invalid status '{new_status}'. Allowed values are: {sorted(list(valid_statuses))}"
@@ -447,7 +447,7 @@ def bulk_update_students(
         session: Active SQLAlchemy database session.
         student_ids: List of student primary key IDs.
         new_batch_id: Optional new target batch primary key ID.
-        new_status: Optional new lifecycle status ('ACTIVE', 'INACTIVE', 'ALUMNI').
+        new_status: Optional new lifecycle status ('ACTIVE', 'INACTIVE', 'ALUMNI', 'LEFT').
 
     Returns:
         The count of updated student records.
@@ -464,7 +464,7 @@ def bulk_update_students(
 
     if new_status is not None:
         normalized_status = new_status.strip().upper()
-        valid_statuses = {"ACTIVE", "INACTIVE", "ALUMNI"}
+        valid_statuses = {"ACTIVE", "INACTIVE", "ALUMNI", "LEFT"}
         if normalized_status not in valid_statuses:
             raise ValueError(
                 f"Invalid status '{new_status}'. Allowed values are: {sorted(list(valid_statuses))}"

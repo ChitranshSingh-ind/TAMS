@@ -16,7 +16,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database.models.batch import Batch
 from app.database.models.parent import Parent
@@ -344,24 +344,26 @@ def get_eligible_recipients(
         })
 
     elif target_type in ("STUDENT", "BATCH", "ALL"):
-        query = select(Student).where(Student.status == "ACTIVE")
+        query = (
+            select(Student)
+            .options(joinedload(Student.parent), joinedload(Student.batch))
+            .where(Student.status == "ACTIVE")
+        )
         if target_type == "STUDENT" and target_ids:
             query = query.where(Student.id.in_(target_ids))
         elif target_type == "BATCH" and target_ids:
             query = query.where(Student.batch_id.in_(target_ids))
 
         students = list(session.scalars(query).all())
-        parents = {p.id: p for p in session.scalars(select(Parent)).all()}
-        batches = {b.id: b for b in session.scalars(select(Batch)).all()}
 
         for s in students:
-            parent = parents.get(s.parent_id) if s.parent_id else None
+            parent = s.parent
             # Prioritize parent WhatsApp number, fallback to parent primary phone
             raw_phone = parent.whatsapp_number if (parent and parent.whatsapp_number) else (
                 parent.phone if (parent and parent.phone) else None
             )
             p_name = parent.name if (parent and parent.name) else f"Parent of {s.first_name}"
-            b = batches.get(s.batch_id)
+            b = s.batch
 
             candidates.append({
                 "raw_phone": raw_phone,
@@ -1057,9 +1059,29 @@ def get_message_history_records(
     if trigger_filter and trigger_filter != "All Triggers":
         stmt = stmt.where(Message.trigger_type == trigger_filter)
 
+    if search_query:
+        term = f"%{search_query.strip()}%"
+        stmt = stmt.outerjoin(Student, Message.student_id == Student.id).where(
+            or_(
+                Message.recipient_name.ilike(term),
+                Message.recipient_phone.ilike(term),
+                Student.first_name.ilike(term),
+                Student.last_name.ilike(term),
+            )
+        )
+
     messages = list(session.scalars(stmt.limit(limit)).all())
-    students = {s.id: s for s in session.scalars(select(Student)).all()}
-    batches = {b.id: b for b in session.scalars(select(Batch)).all()}
+    student_ids = {m.student_id for m in messages if m.student_id is not None}
+    batch_ids = {m.batch_id for m in messages if m.batch_id is not None}
+
+    students = (
+        {s.id: s for s in session.scalars(select(Student).where(Student.id.in_(student_ids))).all()}
+        if student_ids else {}
+    )
+    batches = (
+        {b.id: b for b in session.scalars(select(Batch).where(Batch.id.in_(batch_ids))).all()}
+        if batch_ids else {}
+    )
 
     output = []
     for m in messages:
@@ -1068,11 +1090,6 @@ def get_message_history_records(
 
         s_name = f"{s.first_name} {s.last_name or ''}".strip() if s else "—"
         b_name = b.name if b else "—"
-
-        if search_query:
-            q = search_query.lower()
-            if q not in m.recipient_name.lower() and q not in s_name.lower() and q not in m.recipient_phone:
-                continue
 
         output.append({
             "id": m.id,

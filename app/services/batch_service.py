@@ -20,6 +20,7 @@ def create_batch(
     start_time: time | None = None,
     end_time: time | None = None,
     days: str | None = None,
+    monthly_fee: float | None = None,
 ) -> Batch:
     """
     Creates and persists a new coaching batch.
@@ -30,6 +31,7 @@ def create_batch(
         start_time: Optional scheduled start time of classes.
         end_time: Optional scheduled end time of classes.
         days: Comma-separated scheduled days (e.g. 'Mon,Wed,Fri').
+        monthly_fee: Optional default monthly fee rate for this batch.
 
     Returns:
         The newly created, persisted Batch instance with its assigned primary key.
@@ -40,6 +42,7 @@ def create_batch(
         start_time=start_time,
         end_time=end_time,
         days=days,
+        monthly_fee=monthly_fee,
     )
 
     # Persist the new batch to the database
@@ -92,6 +95,7 @@ def update_batch(
     start_time: time | None = None,
     end_time: time | None = None,
     days: str | None = None,
+    monthly_fee: float | None = None,
     active: bool | None = None,
 ) -> Batch | None:
     """
@@ -104,6 +108,7 @@ def update_batch(
         start_time: Optional updated start time.
         end_time: Optional updated end time.
         days: Optional updated days string.
+        monthly_fee: Optional updated default monthly fee rate.
         active: Optional updated active status flag.
 
     Returns:
@@ -126,6 +131,9 @@ def update_batch(
 
     if days is not None:
         batch.days = days
+
+    if monthly_fee is not None:
+        batch.monthly_fee = monthly_fee
 
     if active is not None:
         batch.active = active

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.database.connection import SessionLocal
@@ -139,7 +140,9 @@ class AddExpenseDialog(QDialog):
         self.pay_now_cb.setStyleSheet(f"color: {NAVY}; font-weight: 600; font-size: 13px;")
         p_layout.addWidget(self.pay_now_cb)
 
-        p_form = QFormLayout()
+        self.payment_fields_widget = QWidget()
+        p_form = QFormLayout(self.payment_fields_widget)
+        p_form.setContentsMargins(0, 0, 0, 0)
         p_form.setSpacing(8)
         p_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         p_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -163,9 +166,9 @@ class AddExpenseDialog(QDialog):
         p_form.addRow("Paid Amount:", self.pay_amount_spin)
         p_form.addRow("Payment Method:", self.pay_method_combo)
         p_form.addRow("Reference No.:", self.ref_input)
-        p_layout.addLayout(p_form)
+        p_layout.addWidget(self.payment_fields_widget)
 
-        self.pay_now_cb.toggled.connect(payment_box.setEnabled)
+        self.pay_now_cb.toggled.connect(self.payment_fields_widget.setEnabled)
         layout.addWidget(payment_box)
 
         # Buttons
@@ -311,13 +314,24 @@ class EditExpenseDialog(QDialog):
         self.payee_input.setText(self.payee)
         self.payee_input.setFixedHeight(36)
 
+        self.has_due_date_cb = QCheckBox("Has Due Date (Unpaid Bill / Liability)")
         self.due_date_edit = QDateEdit()
         self.due_date_edit.setCalendarPopup(True)
         if self.due_date:
             self.due_date_edit.setDate(QDate(self.due_date.year, self.due_date.month, self.due_date.day))
+            self.due_date_edit.setEnabled(True)
+            self.has_due_date_cb.setChecked(True)
         else:
-            self.due_date_edit.setDate(QDate.currentDate())
+            self.due_date_edit.setDate(QDate.currentDate().addDays(7))
+            self.due_date_edit.setEnabled(False)
+            self.has_due_date_cb.setChecked(False)
         self.due_date_edit.setFixedHeight(36)
+        self.has_due_date_cb.toggled.connect(self.due_date_edit.setEnabled)
+
+        due_date_container = QHBoxLayout()
+        due_date_container.setSpacing(8)
+        due_date_container.addWidget(self.has_due_date_cb)
+        due_date_container.addWidget(self.due_date_edit)
 
         self.notes_input = QLineEdit()
         self.notes_input.setText(self.notes)
@@ -328,7 +342,7 @@ class EditExpenseDialog(QDialog):
         form.addRow("Amount Due *:", self.amount_spin)
         form.addRow("Expense Date *:", self.date_edit)
         form.addRow("Payee / Vendor:", self.payee_input)
-        form.addRow("Due Date:", self.due_date_edit)
+        form.addRow("Payment Term:", due_date_container)
         form.addRow("Notes:", self.notes_input)
 
         layout.addLayout(form)
@@ -355,7 +369,7 @@ class EditExpenseDialog(QDialog):
         amount = self.amount_spin.value()
         exp_date = self.date_edit.date().toPyDate()
         payee = self.payee_input.text().strip() or None
-        due_date = self.due_date_edit.date().toPyDate()
+        due_date = self.due_date_edit.date().toPyDate() if self.has_due_date_cb.isChecked() else None
         notes = self.notes_input.text().strip() or None
 
         if not desc:

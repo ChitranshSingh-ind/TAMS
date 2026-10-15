@@ -482,7 +482,7 @@ class ResultsMixin:
                     student.admission_number or "-",
                     f"{student.first_name} {student.last_name or ''}".strip(),
                     student.status,
-                    str(existing_by_student[student.id].marks)
+                    f"{existing_by_student[student.id].marks:g}"
                     if student.id in existing_by_student else "",
                     existing_by_student[student.id].remarks or ""
                     if student.id in existing_by_student else "",
@@ -622,20 +622,20 @@ class ResultsMixin:
                 continue
 
             try:
-                marks = int(marks_text)
+                marks = float(marks_text)
             except ValueError:
                 QMessageBox.warning(
                     self,
                     "Invalid Marks",
-                    f"Enter a whole number for {results_table.item(row_index, 1).text()}.",
+                    f"Enter a valid number for {results_table.item(row_index, 1).text()}.",
                 )
                 return
 
-            if marks < 0 or marks > max_marks:
+            if marks > max_marks:
                 QMessageBox.warning(
                     self,
                     "Marks Out of Range",
-                    f"Marks must be between 0 and {max_marks}.",
+                    f"Marks must be at most {max_marks}.",
                 )
                 return
 

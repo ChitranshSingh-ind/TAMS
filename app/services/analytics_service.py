@@ -766,8 +766,11 @@ def get_student_improvement_analysis(
     tests = list(session.scalars(t_stmt).all())
     test_map = {t.id: t for t in tests}
 
-    res_stmt = select(TestResult)
-    results = list(session.scalars(res_stmt).all())
+    if tests:
+        res_stmt = select(TestResult).where(TestResult.test_id.in_(list(test_map.keys())))
+        results = list(session.scalars(res_stmt).all())
+    else:
+        results = []
     student_res_map: dict[int, list[TestResult]] = {}
     for r in results:
         student_res_map.setdefault(r.student_id, []).append(r)
@@ -915,7 +918,7 @@ def get_retention_analytics(session: Session) -> dict[str, Any]:
     Analyzes student status distribution and admissions history.
     """
     students = list(session.scalars(select(Student)).all())
-    status_counts = {"ACTIVE": 0, "INACTIVE": 0, "LEFT": 0}
+    status_counts = {"ACTIVE": 0, "INACTIVE": 0, "LEFT": 0, "ALUMNI": 0}
     for s in students:
         status_counts[s.status] = status_counts.get(s.status, 0) + 1
 
@@ -934,6 +937,7 @@ def get_retention_analytics(session: Session) -> dict[str, Any]:
         "active_count": status_counts.get("ACTIVE", 0),
         "inactive_count": status_counts.get("INACTIVE", 0),
         "left_count": status_counts.get("LEFT", 0),
+        "alumni_count": status_counts.get("ALUMNI", 0),
         "retention_rate_pct": round(active_rate, 1),
         "admissions_by_month": admissions_by_month,
     }

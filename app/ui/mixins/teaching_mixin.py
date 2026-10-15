@@ -437,8 +437,6 @@ class TeachingMixin:
             return b
 
         batch_id = self.lesson_batch_filter.currentData()
-        if batch_id is None:
-            batch_id = self.batch_selector.currentData()
         search = self.lesson_search_input.text().strip() or None
         status = self.lesson_status_filter.currentData()
 
@@ -701,8 +699,7 @@ class TeachingMixin:
         dlg.exec()
 
     def open_record_class_dialog(self, lesson_id: int | None = None):
-        # RecordClassDialog doesn't take lesson_id; user selects from combo inside
-        dlg = RecordClassDialog(parent=self)
+        dlg = RecordClassDialog(default_lesson_id=lesson_id, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self.load_teaching()
 

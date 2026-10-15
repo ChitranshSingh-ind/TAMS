@@ -120,16 +120,28 @@ def is_pid_alive(pid: int) -> bool:
     if sys.platform == "win32":
         try:
             import ctypes
+            from ctypes import wintypes
             PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
             SYNCHRONIZE = 0x00100000
-            handle = ctypes.windll.kernel32.OpenProcess(
+
+            kernel32 = ctypes.windll.kernel32
+            kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+
+            kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+            kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            kernel32.CloseHandle.restype = wintypes.BOOL
+
+            handle = kernel32.OpenProcess(
                 PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, pid
             )
             if not handle:
                 return False
-            exit_code = ctypes.c_ulong()
-            ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
-            ctypes.windll.kernel32.CloseHandle(handle)
+            exit_code = wintypes.DWORD()
+            kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            kernel32.CloseHandle(handle)
             STILL_ACTIVE = 259
             return exit_code.value == STILL_ACTIVE
         except Exception:
@@ -308,13 +320,20 @@ def is_helper_process_running() -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def write_helper_status(status_data: dict[str, Any]) -> None:
-    """Atomically writes status JSON for inspection by the main TAMS UI."""
+    """Atomically writes status JSON for inspection by the main TAMS UI with retry logic."""
     try:
         HELPER_STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        temp_file = HELPER_STATUS_FILE.with_suffix(".tmp")
+        temp_file = HELPER_STATUS_FILE.with_suffix(f".tmp.{uuid.uuid4().hex[:6]}")
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(status_data, f, indent=2)
-        temp_file.replace(HELPER_STATUS_FILE)
+        for attempt in range(3):
+            try:
+                temp_file.replace(HELPER_STATUS_FILE)
+                break
+            except (PermissionError, OSError):
+                if attempt == 2:
+                    raise
+                time.sleep(0.05)
     except Exception as e:
         logger.warning("Could not write helper status: %s", e)
 
@@ -408,16 +427,31 @@ def check_for_updates() -> dict[str, Any]:
                 }
     except Exception as e:
         logger.debug("Update check returned offline/fallback: %s", e)
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": f"Could not check for updates: {e}",
+            "current_version": APP_VERSION,
+            "latest_version": APP_VERSION,
+            "is_up_to_date": True,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "release_notes": "Unable to check online release notes while offline.",
+            "release_url": "https://github.com/ChitranshSingh-ind/TAMS/releases/latest",
+            "download_url": None,
+            "asset_name": None,
+            "asset_size": 0,
+        }
 
-    # Return safe fallback status
+    # Safe fallback if empty response
     return {
-        "status": "up_to_date",
-        "message": "You are running the latest version of TAMS.",
+        "status": "error",
+        "error": "Empty response received from release server.",
+        "message": "Empty response received from release server.",
         "current_version": APP_VERSION,
         "latest_version": APP_VERSION,
         "is_up_to_date": True,
         "checked_at": datetime.now(timezone.utc).isoformat(),
-        "release_notes": "TAMS v2.0 - Coaching Intelligence, WhatsApp Integration & Analytics Suite.",
+        "release_notes": "Unable to check online release notes.",
         "release_url": "https://github.com/ChitranshSingh-ind/TAMS/releases/latest",
         "download_url": None,
         "asset_name": None,
@@ -433,6 +467,7 @@ def send_helper_ipc_command(command: str) -> bool:
     """
     Sends an IPC command to the background CoachingHelper process.
     Commands supported: 'STOP', 'PAUSE', 'RESUME', 'RUN_CYCLE'.
+    Uses retry loop on file replacement for Windows concurrency reliability.
     """
     valid_commands = {"STOP", "PAUSE", "RESUME", "RUN_CYCLE"}
     cmd_upper = command.strip().upper()
@@ -442,7 +477,7 @@ def send_helper_ipc_command(command: str) -> bool:
 
     try:
         HELPER_CONTROL_FILE.parent.mkdir(parents=True, exist_ok=True)
-        temp_file = HELPER_CONTROL_FILE.with_suffix(".tmp")
+        temp_file = HELPER_CONTROL_FILE.with_suffix(f".tmp.{uuid.uuid4().hex[:6]}")
         payload = {
             "command": cmd_upper,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -450,7 +485,14 @@ def send_helper_ipc_command(command: str) -> bool:
         }
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
-        temp_file.replace(HELPER_CONTROL_FILE)
+        for attempt in range(3):
+            try:
+                temp_file.replace(HELPER_CONTROL_FILE)
+                break
+            except (PermissionError, OSError):
+                if attempt == 2:
+                    raise
+                time.sleep(0.05)
         logger.info("Sent IPC command '%s' to CoachingHelper", cmd_upper)
         return True
     except Exception as e:
@@ -460,23 +502,31 @@ def send_helper_ipc_command(command: str) -> bool:
 
 def read_and_clear_helper_ipc_command() -> str | None:
     """
-    Reads and consumes any pending IPC command file.
+    Reads and consumes any pending IPC command file atomically.
+    Renames HELPER_CONTROL_FILE to a unique .processing file before reading.
     Returns the command name or None if no command is waiting.
     """
     if not HELPER_CONTROL_FILE.exists():
         return None
+
+    processing_file = HELPER_CONTROL_FILE.with_suffix(f".processing.{uuid.uuid4().hex[:6]}")
     try:
-        with open(HELPER_CONTROL_FILE, "r", encoding="utf-8") as f:
+        HELPER_CONTROL_FILE.replace(processing_file)
+    except (FileNotFoundError, PermissionError, OSError):
+        return None
+
+    try:
+        with open(processing_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-        HELPER_CONTROL_FILE.unlink(missing_ok=True)
         return data.get("command")
     except Exception as e:
         logger.debug("Error reading IPC command: %s", e)
+        return None
+    finally:
         try:
-            HELPER_CONTROL_FILE.unlink(missing_ok=True)
+            processing_file.unlink(missing_ok=True)
         except Exception:
             pass
-        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -830,6 +880,13 @@ class CoachingHelperEngine:
         except Exception:
             pass
 
+        cycle_summary = dict(last_summary) if last_summary else {}
+        if cycle_summary:
+            if "cycle_id" not in cycle_summary:
+                cycle_summary["cycle_id"] = str(uuid.uuid4())
+            if "completed_at" not in cycle_summary:
+                cycle_summary["completed_at"] = datetime.now(timezone.utc).isoformat()
+
         data = {
             "state": state,
             "message": message,
@@ -838,7 +895,7 @@ class CoachingHelperEngine:
             "heartbeat_at": datetime.now(timezone.utc).isoformat(),
             "is_online": online,
             "is_paused": self.is_paused,
-            "last_cycle_summary": last_summary or {},
+            "last_cycle_summary": cycle_summary,
             "queue_stats": stats,
             "last_backup_time": self.last_backup_time.isoformat() if self.last_backup_time else None,
             "version": APP_VERSION,

@@ -194,13 +194,15 @@ def get_monthly_financial_comparison(
         )
         exp_incurred = _to_decimal(session.scalar(incurred_stmt))
 
-        # Accrual: Fees billed for fee_month m and academic_year
+        # Accrual: Fees billed for fee_month m and matching exact academic year
+        if m >= 4:
+            valid_ay = [f"{y}-{y + 1}", f"{y}–{y + 1}", str(y)]
+        else:
+            valid_ay = [f"{y - 1}-{y}", f"{y - 1}–{y}", str(y)]
+
         billed_stmt = select(func.coalesce(func.sum(Fee.final_amount_due), 0)).where(
             Fee.fee_month == m,
-            or_(
-                Fee.academic_year == str(y),
-                Fee.academic_year.like(f"%{y}%"),
-            ),
+            Fee.academic_year.in_(valid_ay),
         )
         fees_billed = _to_decimal(session.scalar(billed_stmt))
 

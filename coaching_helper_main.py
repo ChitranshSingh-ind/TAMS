@@ -286,7 +286,13 @@ def run_tray():
     menu.addSeparator()
 
     # Exit action
+    _exiting = False
+
     def exit_helper():
+        nonlocal _exiting
+        if _exiting:
+            return
+        _exiting = True
         worker.stop()
         engine.stop()
         tray_icon.hide()

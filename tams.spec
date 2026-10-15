@@ -18,6 +18,7 @@ hiddenimports = [
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
+    'PyQt6.QtSvg',
     'sqlalchemy',
     'sqlalchemy.sql.default_comparator',
     'sqlalchemy.dialects.sqlite',

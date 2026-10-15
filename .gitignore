@@ -45,3 +45,6 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+tams_audit_part3.txt
+tams_audit_part2.txt

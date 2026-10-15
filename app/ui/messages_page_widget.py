@@ -268,6 +268,7 @@ class MessagesPageWidget(QWidget):
                 background-color: {CREAM};
             }}
         """)
+        self._selected_compose_student_ids: set[int] = set()
         self.setup_ui()
 
     def setup_ui(self):
@@ -603,17 +604,7 @@ class MessagesPageWidget(QWidget):
                 if bid:
                     target_ids = [bid]
             elif mode == "STUDENT":
-                for row in range(self.compose_students_table.rowCount()):
-                    # 1. Get the generic layout container widget from the cell
-                    cell_widget = self.compose_students_table.cellWidget(row, 0)
-                    
-                    # 2. Extract the actual QCheckBox nested inside it
-                    cb = cell_widget.findChild(QCheckBox) if cell_widget else None
-
-                    if cb and cb.isChecked():
-                        s_id = self.compose_students_table.item(row, 1).data(Qt.ItemDataRole.UserRole)
-                        if s_id:
-                            target_ids.append(s_id)
+                target_ids = list(self._selected_compose_student_ids)
             elif mode == "CUSTOM_PHONE":
                 custom_phone = self.compose_custom_phone.text().strip()
                 custom_name = self.compose_custom_name.text().strip()
@@ -663,9 +654,11 @@ class MessagesPageWidget(QWidget):
         self.compose_preview_lbl.setText(rendered)
 
     def _on_compose_clear(self):
+        self._selected_compose_student_ids.clear()
         self.compose_body_edit.clear()
         self.compose_custom_phone.clear()
         self.compose_custom_name.clear()
+        self._filter_compose_students()
         self._update_compose_recipients()
 
     def _on_compose_send(self):
@@ -1104,6 +1097,13 @@ class MessagesPageWidget(QWidget):
         self._load_queue_table()
         self._update_compose_recipients()
 
+    def _on_compose_student_toggled(self, student_id: int, checked: bool):
+        if checked:
+            self._selected_compose_student_ids.add(student_id)
+        else:
+            self._selected_compose_student_ids.discard(student_id)
+        self._update_compose_recipients()
+
     def _filter_compose_students(self):
         if not hasattr(self, "_cached_compose_students"):
             return
@@ -1116,7 +1116,8 @@ class MessagesPageWidget(QWidget):
         self.compose_students_table.setRowCount(len(filtered))
         for row, s in enumerate(filtered):
             cb = QCheckBox()
-            cb.stateChanged.connect(self._update_compose_recipients)
+            cb.setChecked(s.id in self._selected_compose_student_ids)
+            cb.toggled.connect(lambda checked, sid=s.id: self._on_compose_student_toggled(sid, checked))
             cb_container = QWidget()
             cb_l = QHBoxLayout(cb_container)
             cb_l.setContentsMargins(0, 0, 0, 0)

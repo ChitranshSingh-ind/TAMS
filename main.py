@@ -7,6 +7,7 @@ and launches the primary PyQt6 GUI MainWindow.
 """
 
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import platform
 import sys
@@ -33,7 +34,7 @@ def setup_crash_logging() -> None:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.FileHandler(str(log_file), encoding="utf-8"),
+            RotatingFileHandler(str(log_file), maxBytes=5 * 1024 * 1024, backupCount=2, encoding="utf-8"),
             logging.StreamHandler(sys.stdout),
         ],
     )

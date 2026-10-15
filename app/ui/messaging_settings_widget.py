@@ -821,7 +821,8 @@ class MessagingSettingsWidget(QWidget):
             # Save rules toggles
             for row in range(self.rules_table.rowCount()):
                 rule_id = self.rules_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-                cb: QCheckBox = self.rules_table.cellWidget(row, 4)
+                cb_container = self.rules_table.cellWidget(row, 4)
+                cb = cb_container.findChild(QCheckBox) if cb_container else None
                 if rule_id and cb:
                     r = session.get(NotificationRule, rule_id)
                     if r:

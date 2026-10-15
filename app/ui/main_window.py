@@ -1347,6 +1347,18 @@ class MainWindow(
                 self.fee_batch_filter.setCurrentIndex(idx)
             self.fee_batch_filter.blockSignals(False)
 
+        if hasattr(self, "lesson_batch_filter"):
+            curr_lesson_batch = self.lesson_batch_filter.currentData()
+            self.lesson_batch_filter.blockSignals(True)
+            self.lesson_batch_filter.clear()
+            self.lesson_batch_filter.addItem("All Batches", None)
+            for batch in batches:
+                self.lesson_batch_filter.addItem(batch.name, batch.id)
+            idx = self.lesson_batch_filter.findData(curr_lesson_batch)
+            if idx >= 0:
+                self.lesson_batch_filter.setCurrentIndex(idx)
+            self.lesson_batch_filter.blockSignals(False)
+
         if hasattr(self, "analysis_batch_filter"):
             curr_an_batch = self.analysis_batch_filter.currentData()
             self.analysis_batch_filter.blockSignals(True)

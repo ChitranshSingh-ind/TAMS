@@ -6,6 +6,8 @@ and modal dialogs for comprehensive student 360 profiles (attendance histories, 
 and fee payment ledgers).
 """
 
+import html
+
 from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import (
     QDialog,
@@ -246,7 +248,8 @@ class StudentsMixin:
                 batch_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.students_table.setItem(row, 4, batch_item)
 
-                status_item = QTableWidgetItem(student.status)
+                status_item = QTableWidgetItem("")
+                status_item.setData(Qt.ItemDataRole.UserRole, student.status)
                 status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.students_table.setItem(row, 5, status_item)
 
@@ -765,19 +768,19 @@ class StudentsMixin:
                 return
 
             # Student information
-            student_name = (
-                f"{student.first_name} {student.last_name or ''}"
-            ).strip()
+            student_name = html.escape(
+                f"{student.first_name} {student.last_name or ''}".strip()
+            )
 
-            admission_number = student.admission_number or "Not provided"
-            school_name = student.school_name or "Not provided"
-            status = student.status or "Not provided"
-            notes = student.notes or "No notes"
+            admission_number = html.escape(student.admission_number or "Not provided")
+            school_name = html.escape(student.school_name or "Not provided")
+            status = html.escape(student.status or "Not provided")
+            notes = html.escape(student.notes or "No notes")
 
             # Batch
             batch_name = "Not assigned"
             if student.batch:
-                batch_name = student.batch.name
+                batch_name = html.escape(student.batch.name)
 
             # Parent information
             parent_name = "Not provided"
@@ -785,9 +788,9 @@ class StudentsMixin:
             whatsapp_number = "Not provided"
 
             if student.parent:
-                parent_name = student.parent.name or "Not provided"
-                parent_phone = student.parent.phone or "Not provided"
-                whatsapp_number = (
+                parent_name = html.escape(student.parent.name or "Not provided")
+                parent_phone = html.escape(student.parent.phone or "Not provided")
+                whatsapp_number = html.escape(
                     student.parent.whatsapp_number
                     or "Not provided"
                 )

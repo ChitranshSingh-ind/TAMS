@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 )
 
 from app.database.connection import SessionLocal
+from app.database.models.lesson import ClassRecord, Homework, Lesson
 from app.services.batch_service import get_active_batches
 from app.services.lesson_service import (
     LESSON_STATUSES,
@@ -300,9 +301,16 @@ class LessonDialog(QDialog):
 # ─────────────────────────────────────────────────────────────
 
 class RecordClassDialog(QDialog):
-    def __init__(self, record_id: int | None = None, default_batch_id: int | None = None, parent=None):
+    def __init__(
+        self,
+        record_id: int | None = None,
+        default_batch_id: int | None = None,
+        default_lesson_id: int | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.record_id = record_id
+        self.default_lesson_id = default_lesson_id
         self.setWindowTitle("Edit Class Record" if record_id else "Record Completed Class")
         self.resize(560, 640)
         self.setStyleSheet(_dialog_style())
@@ -393,6 +401,25 @@ class RecordClassDialog(QDialog):
 
         if record_id:
             self._populate(record_id)
+        elif default_lesson_id:
+            with SessionLocal() as s:
+                lesson = s.get(Lesson, default_lesson_id)
+            if lesson:
+                idx = self.batch_combo.findData(lesson.batch_id)
+                if idx >= 0:
+                    self.batch_combo.setCurrentIndex(idx)
+                self._reload_lessons()
+                l_idx = self.lesson_combo.findData(lesson.id)
+                if l_idx < 0:
+                    label = f"{lesson.planned_date.strftime('%d %b')} — {lesson.title}"
+                    self.lesson_combo.addItem(label, lesson.id)
+                    l_idx = self.lesson_combo.findData(lesson.id)
+                if l_idx >= 0:
+                    self.lesson_combo.setCurrentIndex(l_idx)
+                if lesson.chapter:
+                    self.chapter_edit.setText(lesson.chapter)
+                if lesson.topic:
+                    self.topic_edit.setText(lesson.topic)
 
     def _reload_lessons(self):
         batch_id = self.batch_combo.currentData()
@@ -411,25 +438,31 @@ class RecordClassDialog(QDialog):
 
     def _populate(self, record_id: int):
         with SessionLocal() as s:
-            records = get_class_records(s)
-        rec = next((r for r in records if r.id == record_id), None)
-        if not rec:
-            return
-        idx = self.batch_combo.findData(rec.batch_id)
-        if idx >= 0:
-            self.batch_combo.setCurrentIndex(idx)
-        self.date_edit.setDate(_qdate(rec.class_date))
-        self.chapter_edit.setText(rec.chapter or "")
-        self.topic_edit.setText(rec.topic or "")
-        self.completed_edit.setPlainText(rec.topics_completed or "")
-        self.partial_edit.setPlainText(rec.topics_partial or "")
-        self.notes_edit.setPlainText(rec.notes or "")
-        self.next_topic_edit.setText(rec.next_topic or "")
-        self.duration_spin.setValue(rec.duration_minutes or 0)
-        if rec.lesson_id:
-            idx2 = self.lesson_combo.findData(rec.lesson_id)
-            if idx2 >= 0:
-                self.lesson_combo.setCurrentIndex(idx2)
+            rec = s.get(ClassRecord, record_id)
+            if not rec:
+                return
+            idx = self.batch_combo.findData(rec.batch_id)
+            if idx >= 0:
+                self.batch_combo.setCurrentIndex(idx)
+            self._reload_lessons()
+            self.date_edit.setDate(_qdate(rec.class_date))
+            self.chapter_edit.setText(rec.chapter or "")
+            self.topic_edit.setText(rec.topic or "")
+            self.completed_edit.setPlainText(rec.topics_completed or "")
+            self.partial_edit.setPlainText(rec.topics_partial or "")
+            self.notes_edit.setPlainText(rec.notes or "")
+            self.next_topic_edit.setText(rec.next_topic or "")
+            self.duration_spin.setValue(rec.duration_minutes or 0)
+            if rec.lesson_id:
+                l_idx = self.lesson_combo.findData(rec.lesson_id)
+                if l_idx < 0:
+                    linked_lesson = s.get(Lesson, rec.lesson_id)
+                    if linked_lesson:
+                        label = f"{linked_lesson.planned_date.strftime('%d %b')} — {linked_lesson.title}"
+                        self.lesson_combo.addItem(label, linked_lesson.id)
+                        l_idx = self.lesson_combo.findData(linked_lesson.id)
+                if l_idx >= 0:
+                    self.lesson_combo.setCurrentIndex(l_idx)
 
     def _accept(self):
         batch_id = self.batch_combo.currentData()
@@ -551,8 +584,7 @@ class HomeworkDialog(QDialog):
 
     def _populate(self, hw_id: int):
         with SessionLocal() as s:
-            hws = get_homeworks(s)
-        hw = next((h for h in hws if h.id == hw_id), None)
+            hw = s.get(Homework, hw_id)
         if not hw:
             return
         idx = self.batch_combo.findData(hw.batch_id)

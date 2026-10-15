@@ -223,6 +223,20 @@ def restore_database_backup(backup_path: str | Path) -> dict[str, Any]:
     if not safety_res["success"] and db_path.exists():
         logger.warning("Pre-restore safety snapshot could not be created: %s", safety_res["error"])
 
+    helper_was_running = False
+    try:
+        from app.services.coaching_helper_service import (
+            is_helper_process_running,
+            start_helper_process,
+            stop_helper_process,
+        )
+        if is_helper_process_running():
+            helper_was_running = True
+            logger.info("CoachingHelper is active; stopping it before database restore...")
+            stop_helper_process(timeout_seconds=3.0)
+    except Exception as e:
+        logger.debug("CoachingHelper pre-restore check note: %s", e)
+
     try:
         # Close any active pooled SQLAlchemy connections before file replacement
         try:
@@ -262,4 +276,12 @@ def restore_database_backup(backup_path: str | Path) -> dict[str, Any]:
     except Exception as e:
         logger.error("Failed restoring database from backup: %s", e)
         return {"success": False, "error": str(e), "safety_snapshot_path": None}
+    finally:
+        if helper_was_running:
+            try:
+                from app.services.coaching_helper_service import start_helper_process
+                logger.info("Restarting CoachingHelper companion after database restore...")
+                start_helper_process(headless=True)
+            except Exception as e:
+                logger.warning("Could not restart CoachingHelper after restore: %s", e)
 

@@ -788,7 +788,7 @@ class CreateFeeDialog(QDialog):
         self.student_combo.setFixedHeight(36)
         with SessionLocal() as session:
             students = session.scalars(
-                select(Student).order_by(Student.first_name, Student.last_name)
+                select(Student).where(Student.status == "ACTIVE").order_by(Student.first_name, Student.last_name)
             ).all()
             for s in students:
                 name = f"{s.first_name} {s.last_name or ''}".strip()

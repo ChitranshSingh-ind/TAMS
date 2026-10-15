@@ -309,9 +309,6 @@ class FeesMixin:
 
         search = self.fee_search_input.text().strip() or None
         batch_id = self.fee_batch_filter.currentData()
-        if batch_id is None and self.batch_selector.currentData() is not None:
-            batch_id = self.batch_selector.currentData()
-
         month = self.fee_month_filter.currentData()
         status = self.fee_status_filter.currentData()
         overdue_only = (status == "OVERDUE")
@@ -495,8 +492,6 @@ class FeesMixin:
 
         search = self.fee_search_input.text().strip() or None
         batch_id = self.fee_batch_filter.currentData()
-        if batch_id is None and self.batch_selector.currentData() is not None:
-            batch_id = self.batch_selector.currentData()
         month = self.fee_month_filter.currentData()
         status = self.fee_status_filter.currentData()
         overdue_only = (status == "OVERDUE")

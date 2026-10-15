@@ -283,11 +283,6 @@ def get_teaching_summary(
         hw_q = hw_q.where(Homework.batch_id == batch_id)
     total_homework = session.scalar(hw_q) or 0
 
-    overdue_hw = session.scalar(
-        (hw_q if batch_id is None else hw_q).where(  # type: ignore[union-attr]
-            Homework.due_date < today,
-        )
-    ) or 0
     # Re-build the HW query cleanly
     hw_base = select(func.count(Homework.id))
     if batch_id is not None:

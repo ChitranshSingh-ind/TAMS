@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -2163,7 +2164,7 @@ class SettingsDialog(QDialog):
     def open_add_batch_dialog(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("Add New Batch")
-        dialog.setFixedSize(560, 500)
+        dialog.setFixedSize(560, 580)
 
         main_layout = QVBoxLayout(dialog)
         main_layout.setContentsMargins(28, 24, 28, 24)
@@ -2220,7 +2221,25 @@ class SettingsDialog(QDialog):
 
         main_layout.addWidget(name_input)
 
-        main_layout.addSpacing(20)
+        main_layout.addSpacing(16)
+
+        # ── Monthly Fee ────────────────────────────────
+
+        fee_label = QLabel("DEFAULT MONTHLY FEE (₹)")
+        fee_label.setObjectName("formLabel")
+
+        main_layout.addWidget(fee_label)
+        main_layout.addSpacing(6)
+
+        fee_input = QDoubleSpinBox()
+        fee_input.setRange(0.0, 1000000.0)
+        fee_input.setValue(0.0)
+        fee_input.setPrefix("₹ ")
+        fee_input.setMinimumHeight(42)
+
+        main_layout.addWidget(fee_input)
+
+        main_layout.addSpacing(16)
 
         # ── Schedule ────────────────────────────────────
 
@@ -2268,7 +2287,7 @@ class SettingsDialog(QDialog):
 
         main_layout.addLayout(time_layout)
 
-        main_layout.addSpacing(20)
+        main_layout.addSpacing(16)
 
         # ── Days ────────────────────────────────────────
 
@@ -2368,6 +2387,8 @@ class SettingsDialog(QDialog):
                 )
                 return
 
+            monthly_fee = fee_input.value() if fee_input.value() > 0 else None
+
             with SessionLocal() as session:
                 create_batch(
                     session=session,
@@ -2375,6 +2396,7 @@ class SettingsDialog(QDialog):
                     start_time=start_input.time().toPyTime(),
                     end_time=end_input.time().toPyTime(),
                     days=", ".join(selected_days),
+                    monthly_fee=monthly_fee,
                 )
 
             self.load_batches()
@@ -2547,7 +2569,7 @@ class SettingsDialog(QDialog):
     def open_edit_batch_dialog(self, batch):
         dialog = QDialog(self)
         dialog.setWindowTitle("Edit Batch")
-        dialog.setFixedSize(560, 500)
+        dialog.setFixedSize(560, 580)
 
         main_layout = QVBoxLayout(dialog)
         main_layout.setContentsMargins(28, 24, 28, 24)
@@ -2600,7 +2622,24 @@ class SettingsDialog(QDialog):
 
         main_layout.addWidget(name_input)
 
-        main_layout.addSpacing(20)
+        main_layout.addSpacing(16)
+
+        # Monthly Fee
+        fee_label = QLabel("DEFAULT MONTHLY FEE (₹)")
+        fee_label.setObjectName("formLabel")
+
+        main_layout.addWidget(fee_label)
+        main_layout.addSpacing(6)
+
+        fee_input = QDoubleSpinBox()
+        fee_input.setRange(0.0, 1000000.0)
+        fee_input.setValue(float(batch.monthly_fee) if batch.monthly_fee is not None else 0.0)
+        fee_input.setPrefix("₹ ")
+        fee_input.setMinimumHeight(42)
+
+        main_layout.addWidget(fee_input)
+
+        main_layout.addSpacing(16)
 
         # Schedule
         schedule_label = QLabel("SCHEDULE")
@@ -2622,8 +2661,8 @@ class SettingsDialog(QDialog):
         start_input.setDisplayFormat("hh:mm AP")
         start_input.setTime(
             QTime(
-                batch.start_time.hour,
-                batch.start_time.minute,
+                batch.start_time.hour if batch.start_time else 17,
+                batch.start_time.minute if batch.start_time else 0,
             )
         )
 
@@ -2640,8 +2679,8 @@ class SettingsDialog(QDialog):
         end_input.setDisplayFormat("hh:mm AP")
         end_input.setTime(
             QTime(
-                batch.end_time.hour,
-                batch.end_time.minute,
+                batch.end_time.hour if batch.end_time else 18,
+                batch.end_time.minute if batch.end_time else 0,
             )
         )
 
@@ -2653,7 +2692,7 @@ class SettingsDialog(QDialog):
 
         main_layout.addLayout(time_layout)
 
-        main_layout.addSpacing(20)
+        main_layout.addSpacing(16)
 
         # Days
         days_label = QLabel("CLASS DAYS")
@@ -2678,7 +2717,7 @@ class SettingsDialog(QDialog):
         existing_days = {
             day.strip()
             for day in batch.days.split(",")
-        }
+        } if batch.days else set()
 
         day_buttons = []
 
@@ -2758,6 +2797,8 @@ class SettingsDialog(QDialog):
                 )
                 return
 
+            monthly_fee = fee_input.value() if fee_input.value() > 0 else None
+
             with SessionLocal() as session:
                 update_batch(
                     session,
@@ -2766,6 +2807,7 @@ class SettingsDialog(QDialog):
                     start_time=start_input.time().toPyTime(),
                     end_time=end_input.time().toPyTime(),
                     days=", ".join(selected_days),
+                    monthly_fee=monthly_fee,
                 )
 
             self.load_batches()

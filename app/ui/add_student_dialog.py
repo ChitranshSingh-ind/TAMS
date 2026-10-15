@@ -159,6 +159,7 @@ class AddStudentDialog(QDialog):
         self.status_input.addItems([
             "ACTIVE",
             "INACTIVE",
+            "ALUMNI",
             "LEFT",
         ])
 

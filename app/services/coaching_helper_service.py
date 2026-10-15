@@ -701,7 +701,7 @@ def stop_helper_process(timeout_seconds: float = 4.0) -> bool:
     # Force kill if still unresponsive
     info = get_helper_process_info()
     pid = info.get("pid")
-    if pid and is_pid_alive(pid):
+    if pid and pid != os.getpid() and is_pid_alive(pid):
         logger.warning("CoachingHelper unresponsive. Force-killing PID %d", pid)
         try:
             if sys.platform == "win32":

@@ -143,6 +143,8 @@ def test_helper_status_reporting():
     assert info.get("running") is True
     assert info.get("pid") == os.getpid()
 
+    HELPER_STATUS_FILE.unlink(missing_ok=True)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. SENSITIVE DATA LOG FILTER

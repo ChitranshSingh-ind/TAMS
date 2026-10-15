@@ -226,11 +226,14 @@ def restore_database_backup(backup_path: str | Path) -> dict[str, Any]:
     helper_was_running = False
     try:
         from app.services.coaching_helper_service import (
+            get_helper_process_info,
             is_helper_process_running,
             start_helper_process,
             stop_helper_process,
         )
-        if is_helper_process_running():
+        info = get_helper_process_info()
+        h_pid = info.get("pid")
+        if is_helper_process_running() and h_pid != os.getpid():
             helper_was_running = True
             logger.info("CoachingHelper is active; stopping it before database restore...")
             stop_helper_process(timeout_seconds=3.0)

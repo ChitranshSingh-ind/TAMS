@@ -183,6 +183,24 @@ class AttendanceMixin:
 
         layout.addWidget(attendance_summary)
 
+        # Inline warning banner when All Batches is selected
+        batch_warning_banner = QLabel("⚠️ Please select a specific batch from the top toolbar to mark and save attendance.")
+        batch_warning_banner.setObjectName("attendanceBatchWarningBanner")
+        batch_warning_banner.setStyleSheet("""
+            QLabel#attendanceBatchWarningBanner {
+                background-color: #FEF3C7;
+                color: #92400E;
+                border: 1px solid #FCD34D;
+                border-radius: 8px;
+                padding: 10px 14px;
+                font-size: 13px;
+                font-weight: 500;
+            }
+        """)
+        batch_warning_banner.setVisible(False)
+        self.attendance_batch_warning_banner = batch_warning_banner
+        layout.addWidget(batch_warning_banner)
+
         # Attendance table
         attendance_table = QTableWidget()
         self.attendance_table = attendance_table
@@ -224,6 +242,7 @@ class AttendanceMixin:
         save_button = QPushButton("Save Attendance")
         save_button.setCursor(Qt.CursorShape.PointingHandCursor)
         save_button.setFixedHeight(40)
+        self.save_attendance_btn = save_button
 
         save_button.setStyleSheet(f"""
             QPushButton {{
@@ -236,8 +255,14 @@ class AttendanceMixin:
                 font-weight: 600;
             }}
 
-            QPushButton:hover {{
+            QPushButton:hover:enabled {{
                 background-color: {DARK_NAVY};
+            }}
+
+            QPushButton:disabled {{
+                background-color: #E2E8F0;
+                color: #94A3B8;
+                border-color: #CBD5E1;
             }}
         """)
         save_button.clicked.connect(self.save_attendance)
@@ -305,6 +330,32 @@ class AttendanceMixin:
             self.attendance_date_picker.date().toPyDate()
         )
 
+        if selected_batch_id is None:
+            self.attendance_table.setRowCount(0)
+            self.attendance_status = {}
+            self.attendance_row_callbacks = {}
+            if hasattr(self, "mark_all_present_btn"):
+                self.mark_all_present_btn.setEnabled(False)
+                self.clear_all_attendance_btn.setEnabled(False)
+            if hasattr(self, "save_attendance_btn"):
+                self.save_attendance_btn.setEnabled(False)
+            if hasattr(self, "attendance_override_button"):
+                self.attendance_override_button.setEnabled(False)
+            if hasattr(self, "attendance_batch_warning_banner"):
+                self.attendance_batch_warning_banner.setVisible(True)
+            self.attendance_summary.setText("Please select a specific batch to record attendance.")
+            return
+
+        if hasattr(self, "attendance_batch_warning_banner"):
+            self.attendance_batch_warning_banner.setVisible(False)
+        if hasattr(self, "save_attendance_btn"):
+            self.save_attendance_btn.setEnabled(True)
+        if hasattr(self, "attendance_override_button"):
+            self.attendance_override_button.setEnabled(True)
+        if hasattr(self, "mark_all_present_btn"):
+            self.mark_all_present_btn.setEnabled(True)
+            self.clear_all_attendance_btn.setEnabled(True)
+
         with SessionLocal() as session:
             students = get_students_by_batch(
                 session,
@@ -345,6 +396,8 @@ class AttendanceMixin:
                 if hasattr(self, "mark_all_present_btn"):
                     self.mark_all_present_btn.setEnabled(False)
                     self.clear_all_attendance_btn.setEnabled(False)
+                if hasattr(self, "save_attendance_btn"):
+                    self.save_attendance_btn.setEnabled(False)
 
                 self.attendance_summary.setText(
                     "Attendance unavailable — "

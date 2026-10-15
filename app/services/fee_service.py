@@ -334,19 +334,19 @@ def generate_monthly_fees(
     student_query = student_query.order_by(Student.first_name, Student.last_name)
     students = list(session.scalars(student_query).all())
 
-    # Fetch existing fees for this year and month
-    existing_fees_query = (
-        select(Fee)
-        .where(
-            Fee.academic_year == academic_year,
-            Fee.fee_month == fee_month,
+    # Fetch existing fees for this year and month for active students in scope
+    student_ids = [s.id for s in students]
+    existing_student_ids: set[int] = set()
+    if student_ids:
+        existing_fees_query = (
+            select(Fee.student_id)
+            .where(
+                Fee.academic_year == academic_year,
+                Fee.fee_month == fee_month,
+                Fee.student_id.in_(student_ids),
+            )
         )
-    )
-    if batch_id is not None:
-        existing_fees_query = existing_fees_query.where(Fee.batch_id == batch_id)
-
-    existing_fees = list(session.scalars(existing_fees_query).all())
-    existing_student_ids = {fee.student_id for fee in existing_fees}
+        existing_student_ids = set(session.scalars(existing_fees_query).all())
 
     preview_items = []
     eligible_students = []

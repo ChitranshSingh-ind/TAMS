@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -9,6 +9,13 @@ from app.database.base import Base
 class TestResult(Base):
     __test__ = False
     __tablename__ = "test_results"
+    __table_args__ = (
+        UniqueConstraint(
+            "test_id",
+            "student_id",
+            name="uq_test_results_test_student",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -16,7 +23,7 @@ class TestResult(Base):
     )
 
     test_id: Mapped[int] = mapped_column(
-        ForeignKey("tests.id"),
+        ForeignKey("tests.id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -25,8 +32,14 @@ class TestResult(Base):
         nullable=False,
     )
 
-    marks: Mapped[int] = mapped_column(
-        Integer,
+    marks: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    is_absent: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
         nullable=False,
     )
 
@@ -46,5 +59,5 @@ class TestResult(Base):
         nullable=False,
     )
 
-    test = relationship("TestModel")
+    test = relationship("TestModel", back_populates="results")
     student = relationship("Student")

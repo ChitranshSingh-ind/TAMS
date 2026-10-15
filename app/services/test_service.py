@@ -26,7 +26,7 @@ def create_test(
     batch_id: int,
     name: str,
     test_date: date,
-    max_marks: int,
+    max_marks: float | int,
 ) -> TestModel:
     """
     Creates and persists a new academic test record for a batch.
@@ -41,11 +41,14 @@ def create_test(
     Returns:
         The newly created TestModel instance.
     """
+    if max_marks <= 0:
+        raise ValueError("Maximum marks must be greater than zero.")
+
     test = TestModel(
         batch_id=batch_id,
         name=name.strip(),
         test_date=test_date,
-        max_marks=max_marks,
+        max_marks=float(max_marks),
     )
 
     session.add(test)
@@ -71,6 +74,7 @@ def get_upcoming_tests(
     """
     statement = (
         select(TestModel)
+        .options(joinedload(TestModel.batch))
         .where(TestModel.test_date >= date.today())
         .order_by(TestModel.test_date)
     )
@@ -87,6 +91,7 @@ def get_tests(
 ) -> list[TestModel]:
     """
     Retrieves all tests ordered newest first, optionally filtered by batch.
+    Eagerly loads the batch relationship to eliminate N+1 queries.
 
     Args:
         session: Active database session.
@@ -95,9 +100,13 @@ def get_tests(
     Returns:
         List of TestModel records.
     """
-    statement = select(TestModel).order_by(
-        TestModel.test_date.desc(),
-        TestModel.id.desc(),
+    statement = (
+        select(TestModel)
+        .options(joinedload(TestModel.batch))
+        .order_by(
+            TestModel.test_date.desc(),
+            TestModel.id.desc(),
+        )
     )
 
     if batch_id is not None:
@@ -153,22 +162,17 @@ def save_test_results(
 
     for entry in entries:
         student_id = int(entry["student_id"])
-        marks = int(entry["marks"])
+        is_absent = bool(entry.get("is_absent", False))
+        marks = float(entry.get("marks", 0.0))
         remarks = str(entry.get("remarks", "")).strip() or None
 
-        # Validate mark range
-        if marks < 0 or marks > test.max_marks:
-            raise ValueError(f"Marks must be between 0 and {test.max_marks}.")
+        # Validate mark range (support negative scoring, ensure <= max_marks)
+        if not is_absent and marks > test.max_marks:
+            raise ValueError(f"Marks must be at most {test.max_marks}.")
 
         student = session.get(Student, student_id)
         if student is None or student.batch_id != test.batch_id:
             raise ValueError("A selected student does not belong to this test's batch.")
-
-        if student.status != "ACTIVE":
-            raise ValueError(
-                f"Results can only be entered or edited for active students. "
-                f"{student.first_name} {student.last_name or ''} is {student.status.lower()}."
-            )
 
         # Check for existing result entry
         existing = session.scalar(
@@ -178,16 +182,24 @@ def save_test_results(
             )
         )
 
+        if existing is None and student.status != "ACTIVE":
+            raise ValueError(
+                f"Results can only be entered for active students. "
+                f"{student.first_name} {student.last_name or ''} is {student.status.lower()}."
+            )
+
         if existing is None:
             existing = TestResult(
                 test_id=test_id,
                 student_id=student_id,
-                marks=marks,
+                marks=marks if not is_absent else 0.0,
+                is_absent=is_absent,
                 remarks=remarks,
             )
             session.add(existing)
         else:
-            existing.marks = marks
+            existing.marks = marks if not is_absent else 0.0
+            existing.is_absent = is_absent
             existing.remarks = remarks
 
         saved_count += 1
@@ -197,20 +209,29 @@ def save_test_results(
     # Trigger automated WhatsApp test score dispatch to parents
     try:
         from app.services.messaging_service import trigger_automation_event
+        # Calculate batch average excluding absent students
+        valid_entries = [e for e in entries if not e.get("is_absent", False)]
+        batch_avg_str = "—"
+        if valid_entries:
+            b_avg = sum(float(e.get("marks", 0.0)) for e in valid_entries) / len(valid_entries)
+            batch_avg_str = f"{b_avg:.1f}"
+
         for entry in entries:
+            if entry.get("is_absent", False):
+                continue
             s_id = int(entry["student_id"])
-            m_val = int(entry["marks"])
+            m_val = float(entry.get("marks", 0.0))
             pct = (m_val / test.max_marks * 100.0) if test.max_marks > 0 else 0.0
             trigger_automation_event(
                 session,
                 event_type="TEST_RESULT",
                 event_data={
-                    "marks": m_val,
-                    "max_marks": test.max_marks,
+                    "marks": f"{m_val:g}",
+                    "max_marks": f"{test.max_marks:g}",
                     "percentage": f"{pct:.1f}",
                     "test_name": test.name,
                     "test_date": test.test_date.strftime("%d %b %Y"),
-                    "batch_avg": "—",
+                    "batch_avg": batch_avg_str,
                 },
                 batch_id=test.batch_id,
                 student_id=s_id,
@@ -286,13 +307,6 @@ def delete_test(
     test = session.get(TestModel, test_id)
     if test is None:
         return False
-
-    # Delete child test results first to respect foreign key integrity
-    results = session.scalars(
-        select(TestResult).where(TestResult.test_id == test_id)
-    ).all()
-    for result in results:
-        session.delete(result)
 
     session.delete(test)
     session.commit()

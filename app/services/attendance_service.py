@@ -12,7 +12,7 @@ Provides business logic for tracking student attendance:
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database.models.attendance import Attendance
@@ -222,7 +222,7 @@ def count_present_students(
         Integer count of present students.
     """
     statement = (
-        select(Attendance)
+        select(func.count(Attendance.id))
         .where(
             Attendance.date == attendance_date,
             Attendance.status == "PRESENT",
@@ -232,7 +232,7 @@ def count_present_students(
     if batch_id is not None:
         statement = statement.where(Attendance.batch_id == batch_id)
 
-    return len(session.scalars(statement).all())
+    return session.scalar(statement) or 0
 
 
 def get_student_attendance_summary(
@@ -258,7 +258,9 @@ def get_student_attendance_summary(
     late = sum(1 for r in attendance_records if r.status == "LATE")
     leave = sum(1 for r in attendance_records if r.status == "LEAVE")
 
-    percentage = ((present / total) * 100) if total > 0 else 0.0
+    effective_total = total - leave
+    attended = present + late
+    percentage = ((attended / effective_total) * 100.0) if effective_total > 0 else 0.0
 
     return {
         "total": total,

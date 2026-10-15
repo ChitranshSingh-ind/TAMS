@@ -164,10 +164,9 @@ def delete_expense(session: Session, expense_id: int) -> bool:
     if expense is None:
         return False
 
-    valid_payments = [p for p in expense.payments if not p.is_reversed]
-    if valid_payments:
+    if expense.payments:
         raise ValueError(
-            "Cannot delete an expense with active payments. Reverse all payments first or mark the expense as void."
+            "Cannot delete an expense with payment history (including reversed payments) to preserve the financial audit trail. Void the expense instead."
         )
 
     session.delete(expense)

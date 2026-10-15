@@ -141,4 +141,4 @@ class Fee(Base):
             return "PARTIALLY_PAID"
         if self.due_date and self.due_date < check_date:
             return "OVERDUE"
-        return "UNPAID"
+        return "PENDING"

@@ -37,10 +37,9 @@ def generate_next_admission_number(session: Session, prefix: str = "ADM") -> str
         ).all()
     )
 
-    # First attempt: find highest numeric suffix matching ADM-{year}-XXXX
+    # First attempt: find highest numeric suffix matching {prefix}-{current_year}-XXXX
     max_seq = 0
     pattern_year = re.compile(rf"^{re.escape(prefix)}-{current_year}-(\d+)$", re.IGNORECASE)
-    pattern_generic = re.compile(r"(\d+)$")
 
     for adm in existing_numbers:
         match_year = pattern_year.match(adm)
@@ -52,20 +51,7 @@ def generate_next_admission_number(session: Session, prefix: str = "ADM") -> str
             except ValueError:
                 pass
 
-    # If no year-based admission numbers found, inspect total count or generic numbers
-    if max_seq == 0:
-        # Check any numbers with digits to establish sensible sequence start
-        for adm in existing_numbers:
-            match_gen = pattern_generic.search(adm)
-            if match_gen:
-                try:
-                    seq = int(match_gen.group(1))
-                    if 0 < seq < 100000 and seq > max_seq:
-                        max_seq = seq
-                except ValueError:
-                    pass
-
-    # Increment and find the first non-colliding admission number
+    # Increment and find the first non-colliding admission number (starts at 0001 if none in current year)
     candidate_seq = max_seq + 1
     while True:
         candidate = f"{year_prefix}{candidate_seq:04d}"
@@ -230,12 +216,14 @@ def create_student_with_parent(
     admission_date,
     status: str,
     notes: str | None,
+    monthly_fee: float | None = None,
 ) -> Student:
     # Check duplicate admission number
     if admission_number:
+        clean_adm = admission_number.strip()
         existing_student = session.scalar(
             select(Student).where(
-                Student.admission_number == admission_number
+                Student.admission_number == clean_adm
             )
         )
 
@@ -243,6 +231,7 @@ def create_student_with_parent(
             raise ValueError(
                 "A student with this admission number already exists."
             )
+        admission_number = clean_adm
 
     # Create parent
     parent = Parent(
@@ -264,6 +253,7 @@ def create_student_with_parent(
         date_of_birth=date_of_birth,
         school_name=school_name,
         admission_date=admission_date,
+        monthly_fee=monthly_fee,
         status=status,
         notes=notes,
     )
@@ -279,7 +269,7 @@ def update_student_with_parent(
     session: Session,
     student_id: int,
     *,
-    admission_number: str | None,
+    admission_number: str | None = None,
     first_name: str,
     last_name: str | None = None,
     parent_name: str | None = None,
@@ -291,25 +281,30 @@ def update_student_with_parent(
     admission_date=None,
     status: str = "ACTIVE",
     notes: str | None = None,
+    monthly_fee: float | None = None,
 ) -> Student | None:
     student = session.get(Student, student_id)
     if student is None:
         return None
 
     # Check duplicate admission number if changing
-    if admission_number and admission_number != student.admission_number:
-        existing_student = session.scalar(
-            select(Student).where(
-                Student.admission_number == admission_number,
-                Student.id != student_id,
+    if admission_number is not None:
+        clean_adm = admission_number.strip()
+        if not clean_adm:
+            raise ValueError("Admission number cannot be empty.")
+        if clean_adm != student.admission_number:
+            existing_student = session.scalar(
+                select(Student).where(
+                    Student.admission_number == clean_adm,
+                    Student.id != student_id,
+                )
             )
-        )
-        if existing_student:
-            raise ValueError(
-                "A student with this admission number already exists."
-            )
+            if existing_student:
+                raise ValueError(
+                    "A student with this admission number already exists."
+                )
+        student.admission_number = clean_adm
 
-    student.admission_number = admission_number.strip() if admission_number else None
     student.first_name = first_name.strip()
     student.last_name = last_name.strip() if last_name else None
     student.batch_id = batch_id
@@ -318,6 +313,8 @@ def update_student_with_parent(
     student.admission_date = admission_date
     student.status = status
     student.notes = notes.strip() if notes else None
+    if monthly_fee is not None:
+        student.monthly_fee = monthly_fee
 
     # Update or create parent
     if parent_name:

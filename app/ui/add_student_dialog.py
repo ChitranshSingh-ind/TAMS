@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QVBoxLayout,
 )
@@ -146,6 +147,13 @@ class AddStudentDialog(QDialog):
 
         self.admission_date_input = QDateEdit()
         self.admission_date_input.setCalendarPopup(True)
+        self.admission_date_input.setDisplayFormat("dd/MM/yyyy")
+        self.admission_date_input.setDate(QDate.currentDate())
+
+        self.monthly_fee_input = QLineEdit()
+        self.monthly_fee_input.setPlaceholderText(
+            "Optional monthly fee (overrides batch rate)"
+        )
 
         self.status_input = QComboBox()
         self.status_input.addItems([
@@ -174,6 +182,7 @@ class AddStudentDialog(QDialog):
         form.addRow("Parent Phone", self.parent_phone_input)
         form.addRow("WhatsApp Number", self.whatsapp_input)
         form.addRow(req("Batch"), self.batch_input)
+        form.addRow("Monthly Fee (₹)", self.monthly_fee_input)
         form.addRow("Date of Birth", self.date_of_birth_input)
         form.addRow("School", self.school_input)
         form.addRow("Admission Date", self.admission_date_input)
@@ -201,6 +210,16 @@ class AddStudentDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout.addWidget(buttons)
+
+    def accept(self) -> None:
+        if self.batch_input.count() == 0 or self.batch_input.currentData() is None:
+            QMessageBox.warning(
+                self,
+                "No Batches Available",
+                "Please create at least one batch before registering students.",
+            )
+            return
+        super().accept()
 
     def _on_auto_generate_toggled(self, checked: bool) -> None:
         """

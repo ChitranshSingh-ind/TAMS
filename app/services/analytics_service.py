@@ -74,6 +74,8 @@ def get_coaching_overview(
         test_map = {t.id: t for t in tests}
         tested_students = set()
         for r in results:
+            if getattr(r, "is_absent", False):
+                continue
             t = test_map.get(r.test_id)
             if t and t.max_marks > 0:
                 pct = (r.marks / t.max_marks) * 100.0
@@ -92,9 +94,9 @@ def get_coaching_overview(
     if end_date is not None:
         att_stmt = att_stmt.where(Attendance.date <= end_date)
     att_records = list(session.scalars(att_stmt).all())
-    total_att = len(att_records)
+    required_att = sum(1 for a in att_records if a.status != "LEAVE")
     present_att = sum(1 for a in att_records if a.status in ("PRESENT", "LATE"))
-    avg_attendance_pct = (present_att / total_att * 100.0) if total_att > 0 else 0.0
+    avg_attendance_pct = (present_att / required_att * 100.0) if required_att > 0 else 0.0
 
     # Risk detection summary
     risk_data = get_student_risk_analysis(
@@ -227,7 +229,7 @@ def get_student_performance_records(
     # Fetch attendance summaries per student
     att_stmt = select(
         Attendance.student_id,
-        func.count(Attendance.id).label("total"),
+        func.sum(case((Attendance.status != "LEAVE", 1), else_=0)).label("total"),
         func.sum(case((Attendance.status.in_(("PRESENT", "LATE")), 1), else_=0)).label("present"),
     ).group_by(Attendance.student_id)
     if start_date:
@@ -243,6 +245,8 @@ def get_student_performance_records(
     # Calculate batch averages for comparison
     batch_percentages: dict[int, list[float]] = {}
     for r in results:
+        if getattr(r, "is_absent", False):
+            continue
         t = test_map.get(r.test_id)
         if t and t.max_marks > 0:
             pct = (r.marks / t.max_marks) * 100.0
@@ -260,6 +264,8 @@ def get_student_performance_records(
 
         pct_list = []
         for r in s_res:
+            if getattr(r, "is_absent", False):
+                continue
             t = test_map.get(r.test_id)
             if t and t.max_marks > 0:
                 pct_list.append((r.marks / t.max_marks) * 100.0)
@@ -355,6 +361,8 @@ def get_batch_comparison_data(
             test_map = {t.id: t for t in tests}
             res_stmt = select(TestResult).where(TestResult.test_id.in_([t.id for t in tests]))
             for r in session.scalars(res_stmt).all():
+                if getattr(r, "is_absent", False):
+                    continue
                 t = test_map.get(r.test_id)
                 if t and t.max_marks > 0:
                     scores.append((r.marks / t.max_marks) * 100.0)
@@ -367,9 +375,9 @@ def get_batch_comparison_data(
         if end_date:
             a_stmt = a_stmt.where(Attendance.date <= end_date)
         att_records = list(session.scalars(a_stmt).all())
-        total_att = len(att_records)
+        required_att = sum(1 for a in att_records if a.status != "LEAVE")
         present_att = sum(1 for a in att_records if a.status in ("PRESENT", "LATE"))
-        att_pct = (present_att / total_att * 100.0) if total_att > 0 else 0.0
+        att_pct = (present_att / required_att * 100.0) if required_att > 0 else 0.0
 
         # Syllabus progress
         lessons = list(session.scalars(
@@ -441,10 +449,11 @@ def get_attendance_analytics(
     for sid, s in students.items():
         recs = student_records.get(sid, [])
         total = len(recs)
-        if total == 0:
+        required = sum(1 for r in recs if r.status != "LEAVE")
+        if required == 0:
             continue
         present = sum(1 for r in recs if r.status in ("PRESENT", "LATE"))
-        pct = (present / total) * 100.0
+        pct = (present / required) * 100.0
 
         if pct >= 90.0:
             bands["Excellent (>90%)"] += 1
@@ -479,8 +488,9 @@ def get_attendance_analytics(
     low_attendance_students.sort(key=lambda x: x["attendance_pct"])
 
     overall_total = len(att_records)
+    overall_required = sum(1 for a in att_records if a.status != "LEAVE")
     overall_present = sum(1 for a in att_records if a.status in ("PRESENT", "LATE"))
-    overall_pct = (overall_present / overall_total * 100.0) if overall_total > 0 else 0.0
+    overall_pct = (overall_present / overall_required * 100.0) if overall_required > 0 else 0.0
 
     return {
         "overall_attendance_pct": round(overall_pct, 1),
@@ -531,7 +541,7 @@ def get_tests_analytics(
         ).all())
         expected_count = len(batch_students)
 
-        pcts = [(r.marks / t.max_marks * 100.0) for r in results if t.max_marks > 0]
+        pcts = [(r.marks / t.max_marks * 100.0) for r in results if t.max_marks > 0 and not getattr(r, "is_absent", False)]
         avg_pct = (sum(pcts) / len(pcts)) if pcts else 0.0
         high_pct = max(pcts) if pcts else 0.0
         low_pct = min(pcts) if pcts else 0.0
@@ -644,8 +654,9 @@ def get_student_risk_analysis(
         # Calculate attendance
         s_atts = student_att.get(s.id, [])
         total_att = len(s_atts)
+        required_att = sum(1 for a in s_atts if a.status != "LEAVE")
         present_att = sum(1 for a in s_atts if a.status in ("PRESENT", "LATE"))
-        att_pct = (present_att / total_att * 100.0) if total_att > 0 else None
+        att_pct = (present_att / required_att * 100.0) if required_att > 0 else None
 
         # Check consecutive recent absences
         consecutive_absences = 0
@@ -659,6 +670,8 @@ def get_student_risk_analysis(
         s_res = student_results.get(s.id, [])
         score_pcts = []
         for r in s_res:
+            if getattr(r, "is_absent", False):
+                continue
             t = tests.get(r.test_id)
             if t and t.max_marks > 0:
                 score_pcts.append((r.marks / t.max_marks) * 100.0)
@@ -768,6 +781,8 @@ def get_student_improvement_analysis(
         s_res = student_res_map.get(s.id, [])
         score_pcts = []
         for r in s_res:
+            if getattr(r, "is_absent", False):
+                continue
             t = test_map.get(r.test_id)
             if t and t.max_marks > 0:
                 score_pcts.append((r.marks / t.max_marks) * 100.0)

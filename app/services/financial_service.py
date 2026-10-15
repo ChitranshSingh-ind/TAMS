@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database.models.expense import Expense
@@ -196,7 +196,11 @@ def get_monthly_financial_comparison(
 
         # Accrual: Fees billed for fee_month m and academic_year
         billed_stmt = select(func.coalesce(func.sum(Fee.final_amount_due), 0)).where(
-            Fee.fee_month == m
+            Fee.fee_month == m,
+            or_(
+                Fee.academic_year == str(y),
+                Fee.academic_year.like(f"%{y}%"),
+            ),
         )
         fees_billed = _to_decimal(session.scalar(billed_stmt))
 

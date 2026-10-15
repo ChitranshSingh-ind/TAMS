@@ -506,6 +506,17 @@ class StudentsMixin:
             dialog.admission_date_input.date().toPyDate()
         )
 
+        monthly_fee_text = dialog.monthly_fee_input.text().strip()
+        try:
+            monthly_fee = float(monthly_fee_text) if monthly_fee_text else None
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                "Invalid Monthly Fee",
+                "Monthly fee must be a valid number.",
+            )
+            return
+
         if not first_name:
             QMessageBox.warning(
                 self,
@@ -546,6 +557,7 @@ class StudentsMixin:
                     admission_date=admission_date,
                     status=status,
                     notes=notes,
+                    monthly_fee=monthly_fee,
                 )
 
             self.load_students()
@@ -589,6 +601,7 @@ class StudentsMixin:
             admission_date = student.admission_date
             status = student.status or "ACTIVE"
             notes = student.notes or ""
+            monthly_fee = student.monthly_fee
 
         dialog = AddStudentDialog(
             batches=batches,
@@ -606,6 +619,8 @@ class StudentsMixin:
         dialog.parent_name_input.setText(parent_name)
         dialog.parent_phone_input.setText(parent_phone)
         dialog.whatsapp_input.setText(whatsapp_number)
+        if monthly_fee is not None:
+            dialog.monthly_fee_input.setText(str(monthly_fee))
 
         if batch_id is not None:
             batch_index = dialog.batch_input.findData(batch_id)
@@ -660,6 +675,17 @@ class StudentsMixin:
         new_status = dialog.status_input.currentText()
         new_notes = dialog.notes_input.toPlainText().strip() or None
 
+        new_monthly_fee_text = dialog.monthly_fee_input.text().strip()
+        try:
+            new_monthly_fee = float(new_monthly_fee_text) if new_monthly_fee_text else None
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                "Invalid Monthly Fee",
+                "Monthly fee must be a valid number.",
+            )
+            return
+
         if not new_first_name:
             QMessageBox.warning(
                 self,
@@ -701,6 +727,7 @@ class StudentsMixin:
                     admission_date=new_admission_date,
                     status=new_status,
                     notes=new_notes,
+                    monthly_fee=new_monthly_fee,
                 )
 
             self.load_students()

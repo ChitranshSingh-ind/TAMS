@@ -263,12 +263,12 @@ class ResultsMixin:
             )
             rows = []
             for test in tests:
-                batch = session.get(Batch, test.batch_id)
+                batch_name = test.batch.name if test.batch is not None else "Unknown batch"
                 rows.append((
                     test.name,
-                    batch.name if batch is not None else "Unknown batch",
+                    batch_name,
                     test.test_date.strftime("%d %b %Y"),
-                    str(test.max_marks),
+                    f"{test.max_marks:g}",
                 ))
 
         self.results_tests_table.setRowCount(len(rows))

@@ -34,19 +34,33 @@ def init_database() -> None:
     logger.info("Initializing database tables and schema...")
     Base.metadata.create_all(bind=engine)
 
-    # Run Alembic migrations if alembic is present to bring schema to head
+    # Run Alembic migrations or stamp head if fresh installation
     try:
         from alembic.config import Config
         from alembic import command
+        from sqlalchemy import inspect, text
 
         base = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else Path(__file__).resolve().parent.parent.parent
         ini_path = base / "alembic.ini"
         if ini_path.exists():
             cfg = Config(str(ini_path))
             cfg.set_main_option("script_location", str(base / "migrations"))
-            command.upgrade(cfg, "head")
+
+            has_revision = False
+            with engine.connect() as conn:
+                inspector = inspect(conn)
+                if "alembic_version" in inspector.get_table_names():
+                    res = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
+                    has_revision = bool(res)
+
+            if not has_revision:
+                logger.info("Database newly created; stamping alembic_version directly to head...")
+                command.stamp(cfg, "head")
+            else:
+                logger.info("Upgrading database schema to head...")
+                command.upgrade(cfg, "head")
     except Exception as e:
-        logger.debug("Alembic upgrade note: %s", e)
+        logger.debug("Alembic initialization note: %s", e)
 
     # Seed essential configuration and default templates if needed
     try:

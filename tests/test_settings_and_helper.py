@@ -24,6 +24,7 @@ from app.services.backup_service import (
     restore_database_backup,
 )
 from app.services.coaching_helper_service import (
+    APP_VERSION,
     SingleInstanceLock,
     check_for_updates,
     check_internet_connectivity,
@@ -242,7 +243,7 @@ def test_coaching_helper_check_for_updates():
     res = check_for_updates()
     assert isinstance(res, dict)
     assert res.get("status") == "up_to_date"
-    assert res.get("current_version") == "2.0.0"
+    assert res.get("current_version") == APP_VERSION
 
 
 def test_coaching_helper_status_file():

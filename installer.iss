@@ -1,8 +1,8 @@
 ; Inno Setup Script for TAMS Desktop Application and CoachingHelper Companion
-; Generates standard Windows installer: Output/TAMS_Setup_v2.0.0.exe
+; Generates standard Windows installer: Output/TAMS_Setup_v1.0.3.exe
 
 #define MyAppName "TAMS"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "Chitransh Singh"
 #define MyAppURL "https://github.com/ChitranshSingh-ind/TAMS"
 #define MyAppExeName "TAMS.exe"

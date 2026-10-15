@@ -232,17 +232,17 @@ def test_delete_expense_protection(db_session):
         payment_date=date(2026, 10, 6),
         payment_method="UPI",
     )
-    with pytest.raises(ValueError, match="Cannot delete an expense with active payments"):
+    with pytest.raises(ValueError, match="Cannot delete an expense with payment history"):
         delete_expense(db_session, exp2.id)
 
-    # 3. If all payments are reversed, deletion succeeds
+    # 3. Even if all payments are reversed, deletion is prevented to preserve audit trail
     reverse_expense_payment(
         db_session,
         payment_id=pay.id,
         reason="Wrong invoice recorded",
     )
-    assert delete_expense(db_session, exp2.id) is True
-    assert get_expense(db_session, exp2.id) is None
+    with pytest.raises(ValueError, match="Cannot delete an expense with payment history"):
+        delete_expense(db_session, exp2.id)
 
 
 def test_expense_payments_and_reversals(db_session):

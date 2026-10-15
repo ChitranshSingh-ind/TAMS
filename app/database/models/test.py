@@ -1,7 +1,7 @@
 from datetime import date, datetime, UTC
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
 
@@ -31,8 +31,8 @@ class TestModel(Base):
         nullable=False,
     )
 
-    max_marks: Mapped[int] = mapped_column(
-        Integer,
+    max_marks: Mapped[float] = mapped_column(
+        Float,
         nullable=False,
     )
 
@@ -41,3 +41,10 @@ class TestModel(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+    results = relationship(
+        "TestResult",
+        back_populates="test",
+        cascade="all, delete-orphan",
+    )
+    batch = relationship("Batch")

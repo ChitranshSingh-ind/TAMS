@@ -48,18 +48,25 @@ jobs:
             throw "Inno Setup compiler (iscc) not found"
           }
 
+      - name: Compress Installer into ZIP
+        run: |
+          Compress-Archive -Path Output\*.exe -DestinationPath Output\TAMS-Windows-Setup.zip -CompressionLevel Fastest -Force
+
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: TAMS-Windows-Installer
-          path: Output/*.exe
+          path: Output/*
+          compression-level: 0
           if-no-files-found: error
 
       - name: Create GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: Output/*.exe
+          files: |
+            Output/*.exe
+            Output/*.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

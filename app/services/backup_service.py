@@ -17,13 +17,24 @@ from app.database.connection import DATABASE_PATH, DATA_DIR
 
 logger = logging.getLogger("TAMS.BackupService")
 
-BACKUP_DIR = DATA_DIR / "backups"
+
+def get_database_path() -> Path:
+    """Returns the path to the active database file, respecting environment overrides."""
+    import os
+    import app.database.connection as conn
+    if "TAMS_DATABASE_PATH" in os.environ:
+        return Path(os.environ["TAMS_DATABASE_PATH"])
+    return Path(conn.DATABASE_PATH)
 
 
 def get_backup_directory() -> Path:
     """Returns the directory where database backups are stored, ensuring it exists."""
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    return BACKUP_DIR
+    import os
+    import app.database.connection as conn
+    base_dir = Path(os.environ.get("TAMS_DATA_DIR", conn.DATA_DIR))
+    backup_dir = base_dir / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    return backup_dir
 
 
 def create_database_backup(
@@ -38,7 +49,7 @@ def create_database_backup(
     Enforces backup retention policy (retains latest `max_retention` backups).
     """
     backup_dir = get_backup_directory()
-    db_path = Path(DATABASE_PATH)
+    db_path = get_database_path()
 
     if max_retention is None:
         try:
@@ -190,7 +201,7 @@ def restore_database_backup(backup_path: str | Path) -> dict[str, Any]:
     Always creates a pre-restore safety snapshot of the current database before replacing it.
     """
     backup_file = Path(backup_path)
-    db_path = Path(DATABASE_PATH)
+    db_path = get_database_path()
 
     if not backup_file.exists():
         return {"success": False, "error": f"Backup file not found: {backup_file}"}

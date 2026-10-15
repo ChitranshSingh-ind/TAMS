@@ -1,69 +1,70 @@
 import os
+import sys
 import tempfile
 from pathlib import Path
 import pytest
 from PyQt6.QtWidgets import QApplication
-import sys
 
-# Ensure Qt offscreen platform is set before any GUI imports
+# Setup temporary test isolation directory before any module imports app.database.connection
+_TEST_TEMP_DIR = tempfile.TemporaryDirectory()
+_TEMP_DATA_DIR = Path(_TEST_TEMP_DIR.name)
+_TEMP_DB_PATH = _TEMP_DATA_DIR / "test_tams.db"
+_TEMP_DB_URL = f"sqlite:///{_TEMP_DB_PATH}"
+
+os.environ["TAMS_DATA_DIR"] = str(_TEMP_DATA_DIR)
+os.environ["TAMS_DATABASE_PATH"] = str(_TEMP_DB_PATH)
+os.environ["TAMS_DATABASE_URL"] = _TEMP_DB_URL
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["PYTEST_CURRENT_TEST"] = "1"
+
 
 @pytest.fixture(scope="session", autouse=True)
 def isolate_test_database():
     """
-    Session-wide fixture that creates a temporary isolated SQLite database
-    and configures TAMS to use it, preventing any modification or pollution
-    of the user's authentic database file (~/.local/share/TAMS/tams.db).
+    Session-wide fixture that builds the schema on the isolated test SQLite database
+    and seeds essential initial data.
     """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_data_dir = Path(temp_dir)
-        temp_db_path = temp_data_dir / "test_tams.db"
-        temp_db_url = f"sqlite:///{temp_db_path}"
+    import app.database.connection as conn
+    conn.DATA_DIR = _TEMP_DATA_DIR
+    conn.DATABASE_PATH = _TEMP_DB_PATH
+    conn.DATABASE_URL = _TEMP_DB_URL
 
-        os.environ["TAMS_DATA_DIR"] = str(temp_data_dir)
-        os.environ["TAMS_DATABASE_PATH"] = str(temp_db_path)
-        os.environ["TAMS_DATABASE_URL"] = temp_db_url
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    new_engine = create_engine(
+        _TEMP_DB_URL,
+        echo=False,
+        connect_args={"timeout": 30.0},
+    )
+    conn.engine = new_engine
+    conn._session_factory = sessionmaker(bind=new_engine, autoflush=False, autocommit=False)
 
-        # Now import connection and models to build schema on the isolated DB
-        import app.database.connection as conn
-        conn.DATA_DIR = temp_data_dir
-        conn.DATABASE_PATH = temp_db_path
-        conn.DATABASE_URL = temp_db_url
+    # Create all tables on the isolated database
+    from app.database.base import Base
+    import app.database.models.batch
+    import app.database.models.parent
+    import app.database.models.student
+    import app.database.models.fee
+    import app.database.models.test
+    import app.database.models.lesson
+    import app.database.models.expense
+    import app.database.models.attendance
+    import app.database.models.message
 
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        new_engine = create_engine(
-            temp_db_url,
-            echo=False,
-            connect_args={"timeout": 30.0},
-        )
-        conn.engine = new_engine
-        conn._session_factory = sessionmaker(bind=new_engine, autoflush=False, autocommit=False)
+    Base.metadata.create_all(bind=new_engine)
 
-        # Create all tables on the isolated database
-        from app.database.base import Base
-        # Ensure all models are registered
-        import app.database.models.batch
-        import app.database.models.parent
-        import app.database.models.student
-        import app.database.models.fee
-        import app.database.models.test
-        import app.database.models.lesson
-        import app.database.models.expense
-        import app.database.models.attendance
-        import app.database.models.message
+    # Seed essential config data
+    from app.services.messaging_service import ensure_messaging_seed_data
+    with conn.SessionLocal() as session:
+        ensure_messaging_seed_data(session)
 
-        Base.metadata.create_all(bind=new_engine)
+    yield
 
-        # Seed essential config data
-        from app.services.messaging_service import ensure_messaging_seed_data
-        with conn.SessionLocal() as session:
-            ensure_messaging_seed_data(session)
-
-        yield
-
-        new_engine.dispose()
+    new_engine.dispose()
+    try:
+        _TEST_TEMP_DIR.cleanup()
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="session")

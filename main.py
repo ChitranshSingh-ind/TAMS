@@ -77,6 +77,10 @@ def main():
         app_font.setStyleHint(QFont.StyleHint.SansSerif)
         app.setFont(app_font)
 
+    # Ensure database schema, tables, and seed data exist before UI loads
+    from app.database.init_db import init_database
+    init_database()
+
     window = MainWindow()
     window.show()
 

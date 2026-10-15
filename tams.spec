@@ -26,6 +26,7 @@ hiddenimports = [
     'sqlite3',
     'packaging',
     'packaging.version',
+    'app.database.init_db',
 ]
 
 # 1. Main TAMS Application Analysis

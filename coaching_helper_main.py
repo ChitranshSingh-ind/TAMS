@@ -341,6 +341,10 @@ def run_tray():
 
 
 def main():
+    # Ensure database schema and tables exist
+    from app.database.init_db import init_database
+    init_database()
+
     parser = argparse.ArgumentParser(description="TAMS CoachingHelper Background Service")
     parser.add_argument(
         "--headless",

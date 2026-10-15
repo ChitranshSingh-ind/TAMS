@@ -33,7 +33,9 @@ logs/
 # Build
 build/
 dist/
+Output/
 *.spec
+!tams.spec
 
 # Testing
 .pytest_cache/

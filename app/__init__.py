@@ -5,4 +5,4 @@ Comprehensive desktop application for coaching institutes, tuition teachers,
 and academic educators.
 """
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"

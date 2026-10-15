@@ -60,3 +60,18 @@ def get_chevron_down_icon_path(color: str = NAVY) -> str:
 
 CHEVRON_DOWN_PATH = get_chevron_down_icon_path(NAVY)
 CHEVRON_DOWN_DISABLED_PATH = get_chevron_down_icon_path(MUTED)
+
+
+def get_app_icon_path() -> Path:
+    """Returns path to the primary application icon (.png or .ico)."""
+    if hasattr(sys, "_MEIPASS"):
+        base_dir = Path(sys._MEIPASS) / "app" / "resources" / "icons"
+    else:
+        base_dir = Path(__file__).resolve().parent.parent / "resources" / "icons"
+
+    if (base_dir / "app_icon.png").exists():
+        return base_dir / "app_icon.png"
+    if (base_dir / "app_icon.ico").exists():
+        return base_dir / "app_icon.ico"
+    return base_dir / "app_icon.svg"
+

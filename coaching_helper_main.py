@@ -78,11 +78,17 @@ def run_tray():
         run_headless()
         return
 
+    from app.ui.theme import get_app_icon_path
+
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
 
     app.setQuitOnLastWindowClosed(False)
+
+    app_icon_file = get_app_icon_path()
+    if app_icon_file.exists():
+        app.setWindowIcon(QIcon(str(app_icon_file)))
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
         logger.info("System tray is not available in current environment. Running headless.")
@@ -144,6 +150,8 @@ def run_tray():
     tray_icon = QSystemTrayIcon()
 
     def make_icon(color_hex="#012D54"):
+        if color_hex == "#012D54" and app_icon_file.exists():
+            return QIcon(str(app_icon_file))
         pix = QPixmap(32, 32)
         pix.fill(QColor(0, 0, 0, 0))
         painter = QPainter(pix)

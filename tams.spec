@@ -64,6 +64,7 @@ exe_tams = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='app/resources/icons/app_icon.ico',
 )
 
 # 2. CoachingHelper Companion Analysis
@@ -101,6 +102,7 @@ exe_helper = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='app/resources/icons/app_icon.ico',
 )
 
 # 3. Combined Directory Output (onedir distribution)

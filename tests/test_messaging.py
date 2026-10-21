@@ -5,6 +5,7 @@ Mocks all network requests to Meta servers to ensure 0 external network dependen
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
@@ -29,10 +30,12 @@ from app.services.messaging_service import (
     cancel_pending_message,
     clear_completed_messages,
     ensure_messaging_seed_data,
+    extract_template_parameters,
     get_eligible_recipients,
     get_message_history_records,
     get_messaging_config,
-    get_messaging_overview_stats,
+    is_date_key,
+    normalize_date_variable,
     process_message_queue,
     queue_message,
     render_template_text,
@@ -179,6 +182,114 @@ def test_whatsapp_send_template_success(mock_urlopen):
     assert result.provider_message_id == "wamid.HBgLMTIzNDU2Nzg5MA=="
 
 
+@mock.patch("urllib.request.urlopen")
+def test_whatsapp_send_template_normalizes_date_parameters(mock_urlopen):
+    mock_response = mock.MagicMock()
+    mock_response.getcode.return_value = 200
+    mock_response.read.return_value = json.dumps({
+        "messaging_product": "whatsapp",
+        "contacts": [{"input": "+919876543210", "wa_id": "919876543210"}],
+        "messages": [{"id": "wamid.TEST_DATE_ISO"}],
+    }).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    config = WhatsAppConfig(
+        phone_number_id="100200300400",
+        waba_id="999888777",
+        access_token="TEST_TOKEN",
+    )
+    provider = WhatsAppCloudProvider(config)
+    result = provider.send_template_message(
+        recipient_phone="+919876543210",
+        template_name="absence_alert",
+        language_code="en",
+        parameters=["Aarav", "21 Oct 2026", "Class 10"],
+    )
+    assert result.success is True
+
+    # Inspect the JSON payload sent via urllib.request.Request
+    call_args = mock_urlopen.call_args[0]
+    req = call_args[0]
+    payload = json.loads(req.data.decode("utf-8"))
+    params = payload["template"]["components"][0]["parameters"]
+    assert params[0]["text"] == "Aarav"
+    assert params[1]["text"] == "2026-10-21"  # Normalized to ISO YYYY-MM-DD!
+    assert params[2]["text"] == "Class 10"
+
+
+@mock.patch("urllib.request.urlopen")
+def test_whatsapp_send_template_named_parameters_and_empty_fallbacks(mock_urlopen):
+    mock_response = mock.MagicMock()
+    mock_response.getcode.return_value = 200
+    mock_response.read.return_value = json.dumps({
+        "messaging_product": "whatsapp",
+        "contacts": [{"input": "+919876543210", "wa_id": "919876543210"}],
+        "messages": [{"id": "wamid.TEST_NAMED_PARAMS"}],
+    }).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    config = WhatsAppConfig(
+        phone_number_id="100200300400",
+        waba_id="999888777",
+        access_token="TEST_TOKEN",
+    )
+    provider = WhatsAppCloudProvider(config)
+    # Test with named parameter names and some empty values to test fallback (resolves Meta Error 100 and 131008)
+    result = provider.send_template_message(
+        recipient_phone="+919876543210",
+        template_name="absence_alert",
+        language_code="en",
+        parameters=["", "21 Oct 2026", ""],
+        parameter_names=["student_name", "date", "batch_name"],
+    )
+    assert result.success is True
+
+    call_args = mock_urlopen.call_args[0]
+    req = call_args[0]
+    payload = json.loads(req.data.decode("utf-8"))
+    params = payload["template"]["components"][0]["parameters"]
+    # 1. Parameter names must be present to satisfy Meta Error 100
+    assert params[0]["parameter_name"] == "student_name"
+    assert params[1]["parameter_name"] == "date"
+    assert params[2]["parameter_name"] == "batch_name"
+    # 2. Text must not be empty to satisfy Meta Error 131008
+    assert params[0]["text"] == "Student"
+    assert params[1]["text"] == "2026-10-21"
+    assert params[2]["text"] == "General"
+
+
+@mock.patch("urllib.request.urlopen")
+def test_whatsapp_hello_world_error_131058_friendly_message(mock_urlopen):
+    import urllib.error
+    # Mock HTTP 400 error 131058
+    error_content = json.dumps({
+        "error": {
+            "message": "(#131058) Hello World templates can only be sent from the Public Test Numbers",
+            "type": "OAuthException",
+            "code": 131058,
+            "error_data": {"details": "Hello World templates can only be sent from the Public Test Numbers"},
+        }
+    }).encode("utf-8")
+    fp = io.BytesIO(error_content)
+    mock_urlopen.side_effect = urllib.error.HTTPError("https://graph.facebook.com", 400, "Bad Request", {}, fp)
+
+    config = WhatsAppConfig(
+        phone_number_id="100200300400",
+        waba_id="999888777",
+        access_token="TEST_TOKEN",
+    )
+    provider = WhatsAppCloudProvider(config)
+    result = provider.send_template_message(
+        recipient_phone="+919876543210",
+        template_name="hello_world",
+        language_code="en_US",
+    )
+    assert result.success is False
+    assert result.error_code == "131058"
+    assert "Public Test Numbers" in result.error_message
+    assert "approved templates" in result.error_message
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. MESSAGING SERVICE LAYER & QUEUE LIFECYCLE
 # ─────────────────────────────────────────────────────────────────────────────
@@ -191,7 +302,117 @@ def test_template_interpolation():
         "due_date": "15/10/2026",
     }
     rendered = render_template_text(template, context)
-    assert rendered == "Hello Aarav Sharma, your fee of ₹4500 is due on 15/10/2026."
+    assert rendered == "Hello Aarav Sharma, your fee of ₹4500 is due on 2026-10-15."
+
+    # Test date object interpolation
+    context_obj = {
+        "student_name": "Aarav Sharma",
+        "amount": "4500",
+        "due_date": date(2026, 10, 15),
+    }
+    assert render_template_text(template, context_obj) == "Hello Aarav Sharma, your fee of ₹4500 is due on 2026-10-15."
+
+    # Test already formatted ISO date string
+    context_iso = {
+        "student_name": "Aarav Sharma",
+        "amount": "4500",
+        "due_date": "2026-10-15",
+    }
+    assert render_template_text(template, context_iso) == "Hello Aarav Sharma, your fee of ₹4500 is due on 2026-10-15."
+
+
+def test_date_normalization_utilities():
+    assert is_date_key("date") is True
+    assert is_date_key("due_date") is True
+    assert is_date_key("test_date") is True
+    assert is_date_key("attendance_date") is True
+    assert is_date_key("student_name") is False
+    assert is_date_key("amount") is False
+
+    assert normalize_date_variable(date(2026, 10, 21)) == "2026-10-21"
+    assert normalize_date_variable(datetime(2026, 10, 21, 14, 30)) == "2026-10-21"
+    assert normalize_date_variable("21 Oct 2026") == "2026-10-21"
+    assert normalize_date_variable("21 October 2026") == "2026-10-21"
+    assert normalize_date_variable("21/10/2026") == "2026-10-21"
+    assert normalize_date_variable("21-10-2026") == "2026-10-21"
+    assert normalize_date_variable("2026-10-21") == "2026-10-21"
+    assert normalize_date_variable("2026/10/21") == "2026-10-21"
+    assert normalize_date_variable("Not A Date") == "Not A Date"
+    assert normalize_date_variable(None) == ""
+
+
+def test_trigger_automation_event_date_formatting():
+    with SessionLocal() as session:
+        ensure_messaging_seed_data(session)
+
+        # Create or fetch a test student with parent and batch
+        from app.database.models.parent import Parent
+        test_parent = Parent(name="Test Guardian", phone="+919876543999")
+        session.add(test_parent)
+        session.flush()
+
+        test_batch = Batch(name="Test Batch Meta Date", days="Mon,Wed,Fri")
+        session.add(test_batch)
+        session.flush()
+
+        test_student = Student(
+            admission_number="ADM-META-DATE-1",
+            first_name="Rohan",
+            last_name="Test",
+            parent_id=test_parent.id,
+            batch_id=test_batch.id,
+            status="ACTIVE",
+        )
+        session.add(test_student)
+        session.flush()
+
+        rule = session.scalar(select(NotificationRule).where(NotificationRule.trigger_event == "ABSENCE"))
+        orig_enabled = rule.is_enabled if rule else False
+        if rule:
+            rule.is_enabled = True
+            session.flush()
+
+        # Trigger ABSENCE event with date formatted or as date object
+        count = trigger_automation_event(
+            session,
+            event_type="ABSENCE",
+            event_data={"date": date(2026, 10, 21)},
+            batch_id=test_batch.id,
+            student_id=test_student.id,
+        )
+        assert count >= 1
+
+        # Retrieve the queued message
+        msg = session.scalar(
+            select(Message).where(
+                Message.student_id == test_student.id,
+                Message.source_module == "ABSENCE",
+            ).order_by(Message.id.desc())
+        )
+        assert msg is not None
+        # Verify date in rendered message body is YYYY-MM-DD
+        assert "2026-10-21" in msg.message_body
+        assert "Oct" not in msg.message_body
+
+        # Verify parameters_json has date in YYYY-MM-DD
+        assert msg.parameters_json is not None
+        params_dict = json.loads(msg.parameters_json)
+        assert params_dict["date"] == "2026-10-21"
+
+        # Verify extract_template_parameters returns YYYY-MM-DD parameter
+        template = session.get(MessageTemplate, msg.template_id)
+        valid, params, err = extract_template_parameters(msg, template)
+        assert valid is True
+        assert "2026-10-21" in params
+
+        # Clean up
+        if rule:
+            rule.is_enabled = orig_enabled
+        session.delete(msg)
+        session.delete(test_student)
+        session.delete(test_batch)
+        session.delete(test_parent)
+        session.commit()
 
 
 def test_messaging_config_and_opt_out():

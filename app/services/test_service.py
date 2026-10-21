@@ -230,7 +230,7 @@ def save_test_results(
                     "max_marks": f"{test.max_marks:g}",
                     "percentage": f"{pct:.1f}",
                     "test_name": test.name,
-                    "test_date": test.test_date.strftime("%d %b %Y"),
+                    "test_date": test.test_date.strftime("%Y-%m-%d"),
                     "batch_avg": batch_avg_str,
                 },
                 batch_id=test.batch_id,

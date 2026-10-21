@@ -455,20 +455,100 @@ def get_eligible_recipients(
 # 3. TEMPLATE INTERPOLATION & QUEUE OPERATIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def is_date_key(key: str) -> bool:
+    """Checks whether a template variable key represents a date field."""
+    k = key.lower().strip()
+    return (
+        k == "date"
+        or k.endswith("_date")
+        or k.startswith("date_")
+        or "_date_" in k
+        or k in {"test_date", "due_date", "attendance_date", "birth_date", "admission_date", "payment_date"}
+    )
+
+
+def normalize_date_variable(val: Any) -> str:
+    """
+    Normalizes a date/datetime object or recognizable date string to ISO YYYY-MM-DD.
+    Complies with Meta WhatsApp Cloud API template variable specifications.
+    """
+    if val is None:
+        return ""
+    if isinstance(val, (date, datetime)):
+        return val.strftime("%Y-%m-%d")
+    val_str = str(val).strip()
+    if not val_str:
+        return ""
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", val_str):
+        return val_str
+    for fmt in (
+        "%d %b %Y",    # 21 Oct 2026
+        "%d %B %Y",    # 21 October 2026
+        "%d/%m/%Y",    # 21/10/2026
+        "%d-%m-%Y",    # 21-10-2026
+        "%Y/%m/%d",    # 2026/10/21
+        "%Y.%m.%d",    # 2026.10.21
+        "%d.%m.%Y",    # 21.10.2026
+        "%m/%d/%Y",    # 10/21/2026
+    ):
+        try:
+            return datetime.strptime(val_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return val_str
+
+
+def get_default_parameter_fallback(key: str, recipient_name: str | None = None) -> str:
+    """
+    Returns a safe non-empty fallback value for a template variable.
+    Prevents Meta WhatsApp API Error 131008 (Parameter of type text is missing text value).
+    """
+    k = key.lower().strip()
+    if k == "student_name":
+        return recipient_name or "Student"
+    elif k == "batch_name":
+        return "General"
+    elif is_date_key(k):
+        return date.today().strftime("%Y-%m-%d")
+    elif k == "amount":
+        return "0"
+    elif k == "announcement_text":
+        return "Important Notice"
+    elif k == "payment_mode":
+        return "Cash"
+    elif k == "receipt_no":
+        return "REC-001"
+    elif k in ("marks", "max_marks", "percentage", "batch_avg"):
+        return "0"
+    return "—"
+
+
 def render_template_text(template_body: str, context: dict[str, Any]) -> str:
     """
     Renders template text by replacing {{key}} tokens with context values.
     Supports both named placeholders like {{student_name}} and positional {{1}}.
+    Formats all date variables as YYYY-MM-DD to comply with Meta WhatsApp API requirements.
     """
     rendered = template_body
     for k, v in context.items():
+        if isinstance(v, (date, datetime)):
+            val_str = v.strftime("%Y-%m-%d")
+        elif is_date_key(k):
+            val_str = normalize_date_variable(v)
+        else:
+            val_str = str(v) if v is not None else ""
         placeholder_named = f"{{{{{k}}}}}"
-        rendered = rendered.replace(placeholder_named, str(v) if v is not None else "")
+        rendered = rendered.replace(placeholder_named, val_str)
 
     # Also handle numeric parameters if given as param_1, param_2
     for i in range(1, 10):
         if f"param_{i}" in context:
-            rendered = rendered.replace(f"{{{{{i}}}}}", str(context[f"param_{i}"]))
+            p_val = context[f"param_{i}"]
+            if isinstance(p_val, (date, datetime)):
+                p_val_str = p_val.strftime("%Y-%m-%d")
+            else:
+                p_val_str = str(p_val) if p_val is not None else ""
+            rendered = rendered.replace(f"{{{{{i}}}}}", p_val_str)
 
     return rendered
 
@@ -498,7 +578,28 @@ def queue_message(
 
     params_json_str = None
     if parameters is not None:
-        params_json_str = json.dumps(parameters) if not isinstance(parameters, str) else parameters
+        if isinstance(parameters, dict):
+            normalized_dict = {}
+            for k, v in parameters.items():
+                if isinstance(v, (date, datetime)):
+                    normalized_dict[k] = v.strftime("%Y-%m-%d")
+                elif is_date_key(k):
+                    normalized_dict[k] = normalize_date_variable(v)
+                else:
+                    normalized_dict[k] = v
+            params_json_str = json.dumps(normalized_dict)
+        elif isinstance(parameters, list):
+            normalized_list = []
+            for p in parameters:
+                if isinstance(p, (date, datetime)):
+                    normalized_list.append(p.strftime("%Y-%m-%d"))
+                else:
+                    normalized_list.append(normalize_date_variable(p) if isinstance(p, str) and ("-" in p or "/" in p or " " in p) else p)
+            params_json_str = json.dumps(normalized_list)
+        elif isinstance(parameters, str):
+            params_json_str = parameters
+        else:
+            params_json_str = json.dumps(parameters)
 
     msg = Message(
         recipient_phone=e164_phone,
@@ -550,19 +651,45 @@ def queue_bulk_messages(
 
     for r in recipients:
         phone = r["phone"]
-        r_name = r.get("recipient_name", "Parent")
+        r_name = r.get("recipient_name") or "Parent"
+        st_name = r.get("student_name") or r_name or "Student"
+        b_name = r.get("batch_name") or "General"
+        today_iso = date.today().strftime("%Y-%m-%d")
+
         context = {
-            "student_name": r.get("student_name", ""),
-            "batch_name": r.get("batch_name", ""),
+            "student_name": st_name,
+            "batch_name": b_name,
             "recipient_name": r_name,
+            "date": today_iso,
+            "due_date": today_iso,
+            "test_date": today_iso,
         }
+
+        # If sending announcement template or general notice, extract custom message body
+        announcement_content = ""
+        if "Important Announcement from TAMS:" in message_body_template:
+            ann_match = re.search(r"Important Announcement from TAMS:\s*(.*?)(?:\.\s*Batch:|$)", message_body_template, re.DOTALL)
+            if ann_match:
+                announcement_content = ann_match.group(1).strip()
+        if not announcement_content:
+            announcement_content = message_body_template.strip()
+        context["announcement_text"] = announcement_content
+
         body = render_template_text(message_body_template, context)
 
         params_list = None
         if template and template.parameters_json:
             try:
                 param_keys = json.loads(template.parameters_json)
-                params_list = [str(context.get(k, "")) for k in param_keys]
+                params_list = []
+                for k in param_keys:
+                    val = context.get(k)
+                    if val is None or not str(val).strip():
+                        val = get_default_parameter_fallback(k, r_name)
+                    if is_date_key(k):
+                        params_list.append(normalize_date_variable(val))
+                    else:
+                        params_list.append(str(val))
             except Exception:
                 params_list = None
 
@@ -634,13 +761,31 @@ def extract_template_parameters(
             if isinstance(params, list):
                 if expected_param_keys and len(params) != len(expected_param_keys):
                     return False, [], f"Template parameter mismatch: expected {len(expected_param_keys)} parameters ({expected_param_keys}), got {len(params)}"
-                return True, [str(p) for p in params], ""
+                result = []
+                for idx, p in enumerate(params):
+                    k = expected_param_keys[idx] if idx < len(expected_param_keys) else ""
+                    val = p
+                    if val is None or not str(val).strip():
+                        val = get_default_parameter_fallback(k, message.recipient_name)
+                    if is_date_key(k):
+                        result.append(normalize_date_variable(val))
+                    elif isinstance(val, (date, datetime)):
+                        result.append(val.strftime("%Y-%m-%d"))
+                    else:
+                        result.append(str(val))
+                return True, result, ""
             elif isinstance(params, dict):
                 ordered = []
                 for k in expected_param_keys:
-                    if k not in params:
-                        return False, [], f"Missing required template parameter: '{k}'"
-                    ordered.append(str(params[k]))
+                    val = params.get(k)
+                    if val is None or not str(val).strip():
+                        val = get_default_parameter_fallback(k, message.recipient_name)
+                    if is_date_key(k):
+                        ordered.append(normalize_date_variable(val))
+                    elif isinstance(val, (date, datetime)):
+                        ordered.append(val.strftime("%Y-%m-%d"))
+                    else:
+                        ordered.append(str(val))
                 return True, ordered, ""
         except Exception as e:
             return False, [], f"Invalid parameters_json format: {e}"
@@ -660,7 +805,15 @@ def extract_template_parameters(
         pattern = "^" + pattern + "$"
         match = re.match(pattern, message.message_body.strip())
         if match:
-            params = [str(match.group(k)) for k in expected_param_keys]
+            params = []
+            for k in expected_param_keys:
+                raw_val = match.group(k)
+                if raw_val is None or not str(raw_val).strip():
+                    raw_val = get_default_parameter_fallback(k, message.recipient_name)
+                if is_date_key(k):
+                    params.append(normalize_date_variable(raw_val))
+                else:
+                    params.append(str(raw_val))
             return True, params, ""
     except Exception:
         pass
@@ -782,11 +935,19 @@ def process_message_queue(
                 meta_template_name = template.meta_template_name
                 lang_code = template.language or "en_US"
 
+                expected_param_keys = []
+                if template.parameters_json:
+                    try:
+                        expected_param_keys = json.loads(template.parameters_json)
+                    except Exception:
+                        expected_param_keys = []
+
                 res = provider.send_template_message(
                     recipient_phone=m.recipient_phone,
                     template_name=meta_template_name,
                     language_code=lang_code,
                     parameters=params if params else None,
+                    parameter_names=expected_param_keys if expected_param_keys else None,
                 )
             elif m.template_name:
                 # Template name without template record (fallback)
@@ -952,6 +1113,14 @@ def trigger_automation_event(
             ctx["student_name"] = r["student_name"]
             ctx["batch_name"] = r["batch_name"]
             ctx["recipient_name"] = r["recipient_name"]
+
+            # Normalize any date variables in ctx to YYYY-MM-DD
+            for k, v in list(ctx.items()):
+                if isinstance(v, (date, datetime)):
+                    ctx[k] = v.strftime("%Y-%m-%d")
+                elif is_date_key(k):
+                    ctx[k] = normalize_date_variable(v)
+
             body = render_template_text(template.body, ctx)
 
             cfg = get_messaging_config(session)
@@ -965,6 +1134,7 @@ def trigger_automation_event(
                 batch_id=r["batch_id"],
                 template_id=template.id,
                 template_name=template.name,
+                parameters=ctx,
                 category=template.category,
                 trigger_type="AUTOMATED",
                 source_module=event_type,

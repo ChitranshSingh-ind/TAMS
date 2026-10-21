@@ -17,7 +17,7 @@ import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from app.database.connection import DATA_DIR
@@ -163,6 +163,41 @@ def mask_phone_number(phone: str | None) -> str:
     if len(clean) >= 10:
         return f"{clean[:5]}*** **{clean[-3:]}"
     return f"{clean[:2]}***{clean[-2:]}"
+
+
+def normalize_date_param(val: Any) -> str:
+    """
+    Ensures dates sent as parameters to Meta template variables are formatted in ISO YYYY-MM-DD.
+    If the parameter is a date/datetime or a recognizable date string, returns YYYY-MM-DD.
+    Otherwise returns str(val).
+    """
+    if val is None:
+        return ""
+    if isinstance(val, (date, datetime)):
+        return val.strftime("%Y-%m-%d")
+    val_str = str(val).strip()
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", val_str):
+        return val_str
+    for fmt in ("%d %b %Y", "%d %B %Y", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(val_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return val_str
+
+
+def is_date_key(key: str | None) -> bool:
+    """Checks whether a parameter name represents a date."""
+    if not key:
+        return False
+    k = str(key).lower().strip()
+    return (
+        k == "date"
+        or k.endswith("_date")
+        or k.startswith("date_")
+        or "_date_" in k
+        or k in {"test_date", "due_date", "attendance_date", "birth_date", "admission_date", "payment_date"}
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -348,10 +383,13 @@ class WhatsAppCloudProvider:
         recipient_phone: str,
         template_name: str,
         language_code: str = "en",
-        parameters: list[str] | None = None,
+        parameters: list[str] | list[dict[str, Any]] | None = None,
+        parameter_names: list[str] | None = None,
     ) -> WhatsAppSendResult:
         """
         Sends an approved Meta WhatsApp template message (e.g. 'hello_world' or parameterized template).
+        Supports both named parameters (required by modern Meta templates) and positional parameters.
+        Ensures dates are formatted in ISO YYYY-MM-DD and parameter text values are never empty.
         """
         token = self.config.access_token or get_access_token()
         if not token:
@@ -393,11 +431,57 @@ class WhatsAppCloudProvider:
             "language": {"code": language_code.strip() or "en"},
         }
 
+        param_components: list[dict[str, Any]] = []
         if parameters:
-            param_components = [
-                {"type": "text", "text": str(p)}
-                for p in parameters
-            ]
+            for idx, p in enumerate(parameters):
+                # If already structured component dict
+                if isinstance(p, dict):
+                    comp = dict(p)
+                    if "type" not in comp:
+                        comp["type"] = "text"
+                    if "text" in comp:
+                        comp["text"] = normalize_date_param(comp["text"])
+                        if not str(comp["text"]).strip():
+                            comp["text"] = "—"
+                    param_components.append(comp)
+                    continue
+
+                # Scalar value
+                raw_text = normalize_date_param(p)
+                clean_text = str(raw_text).strip() if raw_text is not None else ""
+
+                param_name = None
+                if parameter_names and idx < len(parameter_names):
+                    cand = str(parameter_names[idx]).strip()
+                    # A parameter name is a named variable if it's not purely digits
+                    if cand and not cand.isdigit() and not cand.startswith("param_"):
+                        param_name = cand
+
+                # Meta Error 131008: Parameter of type text is missing text value
+                if not clean_text:
+                    if param_name == "student_name":
+                        clean_text = "Student"
+                    elif param_name == "batch_name":
+                        clean_text = "General"
+                    elif param_name and (is_date_key(param_name) or "date" in param_name):
+                        clean_text = date.today().strftime("%Y-%m-%d")
+                    elif param_name == "amount":
+                        clean_text = "0"
+                    elif param_name == "announcement_text":
+                        clean_text = "Important Notice"
+                    else:
+                        clean_text = "—"
+
+                comp: dict[str, Any] = {
+                    "type": "text",
+                    "text": clean_text,
+                }
+                # Meta Error 100: Parameter name is missing or empty
+                if param_name:
+                    comp["parameter_name"] = param_name
+
+                param_components.append(comp)
+
             template_obj["components"] = [
                 {
                     "type": "body",
@@ -413,7 +497,26 @@ class WhatsAppCloudProvider:
             "template": template_obj,
         }
 
-        return self._post_message(payload, token, phone_number_id)
+        res = self._post_message(payload, token, phone_number_id)
+
+        # Resilient retry: If Meta returns Error 100 for named/positional mismatch, adjust and retry once
+        if not res.success and res.error_code == "100" and param_components:
+            err_msg_lower = (res.error_message or "").lower()
+            # If we sent parameter_name but template in Meta was positional:
+            if any("parameter_name" in c for c in param_components):
+                if any(w in err_msg_lower for w in ("not allow", "not support", "unexpected", "positional")):
+                    for c in param_components:
+                        c.pop("parameter_name", None)
+                    return self._post_message(payload, token, phone_number_id)
+            # If we sent positional but template in Meta was named:
+            elif parameter_names and any(cand and not cand.isdigit() for cand in parameter_names):
+                if any(w in err_msg_lower for w in ("parameter name is missing", "parameter name is required", "missing or empty")):
+                    for idx, c in enumerate(param_components):
+                        if idx < len(parameter_names):
+                            c["parameter_name"] = parameter_names[idx]
+                    return self._post_message(payload, token, phone_number_id)
+
+        return res
 
     def send_text_message(
         self,
@@ -511,6 +614,12 @@ class WhatsAppCloudProvider:
                 err_title = error_obj.get("error_data", {}).get("details", "")
                 if err_title:
                     meta_err_msg = f"{meta_err_msg} ({err_title})"
+                if meta_code == 131058:
+                    meta_err_msg = (
+                        "Hello World templates can only be sent from Meta Public Test Numbers. "
+                        "For your registered business number, please send approved templates "
+                        "(e.g. absence_alert, fee_due_reminder, payment_receipt, general_announcement)."
+                    )
             except Exception:
                 meta_err_msg = err_body
 

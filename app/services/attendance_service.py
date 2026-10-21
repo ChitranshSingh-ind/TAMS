@@ -142,7 +142,7 @@ def save_batch_attendance(
                 trigger_automation_event(
                     session,
                     event_type="ABSENCE",
-                    event_data={"date": attendance_date.strftime("%d %b %Y")},
+                    event_data={"date": attendance_date.strftime("%Y-%m-%d")},
                     batch_id=batch_id,
                     student_id=student_id,
                 )

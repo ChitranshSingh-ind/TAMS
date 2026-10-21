@@ -108,11 +108,11 @@ DEFAULT_TEMPLATES: list[dict[str, Any]] = [
         "associated_trigger": "FEE_DUE",
     },
     {
-        "name": "fee_overdue_notice",
-        "meta_template_name": "fee_overdue_notice",
+        "name": "fee_overdue_reminder",
+        "meta_template_name": "fee_overdue_reminder",
         "category": "UTILITY",
         "language": "en",
-        "body": "Dear Parent, tuition fee of ₹{{amount}} for {{student_name}} is overdue since {{due_date}}. Kindly clear the outstanding fee at your earliest convenience. Thank you, TAMS.",
+        "body": "Dear Parent, tuition fee of ₹{{amount}} for {{student_name}} is overdue since {{due_date}}. Kindly clear the outstanding fee at your earliest convenience. Thank you, Vishal Sir's Coaching",
         "parameters_json": '["amount", "student_name", "due_date"]',
         "is_active": True,
         "meta_status": "LOCAL_ONLY",
@@ -190,7 +190,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "is_enabled": False,  # DISABLED BY DEFAULT
         "days_offset": 1,
         "cooldown_days": 5,
-        "template_name": "fee_overdue_notice",
+        "template_name": "fee_overdue_reminder",
     },
     {
         "name": "Fee Payment Acknowledgement",

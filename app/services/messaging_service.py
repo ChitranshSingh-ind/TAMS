@@ -101,7 +101,7 @@ DEFAULT_TEMPLATES: list[dict[str, Any]] = [
         "meta_template_name": "fee_due_reminder",
         "category": "UTILITY",
         "language": "en",
-        "body": "Dear Parent, reminder that tuition fee of ₹{{amount}} for {{student_name}} (Batch: {{batch_name}}) is due on {{due_date}}. Thank you, TAMS Coaching.",
+        "body": "Dear Parent, reminder that tuition fee of ₹{{amount}} for {{student_name}} (Batch: {{batch_name}}) is due on {{due_date}}. Thank you, Vishal Sir's Coaching.",
         "parameters_json": '["amount", "student_name", "batch_name", "due_date"]',
         "is_active": True,
         "meta_status": "LOCAL_ONLY",
@@ -123,7 +123,7 @@ DEFAULT_TEMPLATES: list[dict[str, Any]] = [
         "meta_template_name": "payment_receipt",
         "category": "UTILITY",
         "language": "en",
-        "body": "Dear Parent, payment of ₹{{amount}} for {{student_name}} has been received successfully via {{payment_mode}}. Receipt No: {{receipt_no}}. Thank you, TAMS Coaching.",
+        "body": "Dear Parent, payment of ₹{{amount}} for {{student_name}} has been received successfully via {{payment_mode}}. Receipt No: {{receipt_no}}. Thank you, Vishal Sir's Coaching.",
         "parameters_json": '["amount", "student_name", "payment_mode", "receipt_no"]',
         "is_active": True,
         "meta_status": "LOCAL_ONLY",
@@ -156,7 +156,7 @@ DEFAULT_TEMPLATES: list[dict[str, Any]] = [
         "meta_template_name": "test_result_notification",
         "category": "UTILITY",
         "language": "en",
-        "body": "Dear Parent, {{student_name}} scored {{marks}}/{{max_marks}} ({{percentage}}%) in {{test_name}} on {{test_date}}. Batch Average: {{batch_avg}}%. TAMS Coaching.",
+        "body": "Dear Parent, {{student_name}} scored {{marks}}/{{max_marks}} ({{percentage}}%) in {{test_name}} on {{test_date}}. Batch Average: {{batch_avg}}%. Vishal Sir's Coaching.\n*If your child has scored less marks then average then contact us*.",
         "parameters_json": '["student_name", "marks", "max_marks", "percentage", "test_name", "test_date", "batch_avg"]',
         "is_active": True,
         "meta_status": "LOCAL_ONLY",
@@ -167,7 +167,7 @@ DEFAULT_TEMPLATES: list[dict[str, Any]] = [
         "meta_template_name": "general_announcement",
         "category": "UTILITY",
         "language": "en",
-        "body": "Important Announcement from TAMS: {{announcement_text}}. Batch: {{batch_name}}.",
+        "body": "Important Announcement from TAMS: {{announcement_text}}. Batch: {{batch_name}} ,Thanks.",
         "parameters_json": '["announcement_text", "batch_name"]',
         "is_active": True,
         "meta_status": "LOCAL_ONLY",
@@ -250,6 +250,14 @@ def ensure_messaging_seed_data(session: Session) -> None:
                 meta_status=tmpl["meta_status"],
                 associated_trigger=tmpl["associated_trigger"],
             ))
+        else:
+            # Sync updated default template attributes into database
+            curr = existing_tmpl[tmpl["name"]]
+            curr.body = tmpl["body"]
+            curr.meta_template_name = tmpl["meta_template_name"]
+            curr.category = tmpl["category"]
+            curr.parameters_json = tmpl["parameters_json"]
+            curr.associated_trigger = tmpl["associated_trigger"]
 
     session.flush()
 

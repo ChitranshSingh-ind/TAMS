@@ -45,10 +45,10 @@ logger = logging.getLogger("TAMS.MessagingService")
 # ─────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_CONFIGS: dict[str, str] = {
-    "whatsapp_environment": "DEVELOPMENT",  # "DEVELOPMENT" (test sender) or "PRODUCTION"
-    "whatsapp_phone_number_id": "",
-    "whatsapp_waba_id": "",
-    "whatsapp_api_version": DEFAULT_GRAPH_API_VERSION,
+    "whatsapp_environment": "PRODUCTION",  # "PRODUCTION" or "DEVELOPMENT"
+    "whatsapp_phone_number_id": "1480753541781147",
+    "whatsapp_waba_id": "970600618872001",
+    "whatsapp_api_version": "v26.0",
     "retry_limit": "3",
     "retry_backoff_base": "60",  # 60s -> 120s -> 240s
     "helper_polling_interval": "15",
@@ -221,7 +221,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "trigger_event": "TEST_RESULT",
         "is_enabled": False,  # DISABLED BY DEFAULT
         "days_offset": 0,
-        "cooldown_days": 1,
+        "cooldown_days": 0,
         "template_name": "test_result_notification",
     },
 ]
@@ -234,6 +234,8 @@ def ensure_messaging_seed_data(session: Session) -> None:
     for key, val in DEFAULT_CONFIGS.items():
         if key not in existing_configs:
             session.add(MessagingConfig(key=key, value=val))
+        elif key in ("whatsapp_phone_number_id", "whatsapp_waba_id", "whatsapp_api_version") and not existing_configs[key].value:
+            existing_configs[key].value = val
 
     # 2. Templates
     existing_tmpl = {t.name: t for t in session.scalars(select(MessageTemplate)).all()}
@@ -271,10 +273,15 @@ def ensure_messaging_seed_data(session: Session) -> None:
                 trigger_event=r["trigger_event"],
                 is_enabled=r["is_enabled"],
                 days_offset=r.get("days_offset", 0),
-                cooldown_days=r.get("cooldown_days", 2),
+                cooldown_days=r.get("cooldown_days", 0 if r["trigger_event"] == "TEST_RESULT" else 2),
                 min_consecutive_days=r.get("min_consecutive_days", 2),
                 template_id=tmpl_map.get(r["template_name"]),
             ))
+        else:
+            # Sync rule parameters like cooldown_days for TEST_RESULT
+            curr_rule = existing_rules[r["name"]]
+            if r["trigger_event"] == "TEST_RESULT":
+                curr_rule.cooldown_days = 0
 
     session.commit()
 
@@ -569,7 +576,7 @@ def queue_message(
     trigger_type: str = "MANUAL",
     source_module: str | None = None,
     source_record_id: int | None = None,
-    environment: str = "DEVELOPMENT",
+    environment: str = "PRODUCTION",
 ) -> Message:
     """Queues a single outgoing message safely into the database."""
     is_valid, e164_phone, reason = normalize_phone_number(recipient_phone)
@@ -1065,10 +1072,11 @@ def trigger_automation_event(
     event_data: dict[str, Any],
     batch_id: int | None = None,
     student_id: int | None = None,
+    source_record_id: int | None = None,
 ) -> int:
     """
     Evaluates enabled notification rules matching event_type.
-    Applies cooldown periods to prevent duplicate messages on restarts or duplicate events.
+    Applies cooldown periods and record-level deduplication to prevent duplicate messages.
     """
     rules_stmt = select(NotificationRule).where(
         NotificationRule.trigger_event == event_type,
@@ -1091,20 +1099,36 @@ def trigger_automation_event(
         if not template or not template.is_active:
             continue
 
-        # Cooldown check: Has an automated message for this student and trigger occurred within cooldown_days?
+        # Cooldown & deduplication check
         if student_id:
-            cooldown_cutoff = now - timedelta(days=rule.cooldown_days)
-            recent_msg = session.scalar(
-                select(Message).where(
-                    Message.student_id == student_id,
-                    Message.template_name == template.name,
-                    Message.trigger_type == "AUTOMATED",
-                    Message.queued_at >= cooldown_cutoff,
+            # 1. Deduplication per specific record (e.g. test_id, payment_id)
+            if source_record_id is not None:
+                record_msg = session.scalar(
+                    select(Message).where(
+                        Message.student_id == student_id,
+                        Message.template_name == template.name,
+                        Message.trigger_type == "AUTOMATED",
+                        Message.source_record_id == source_record_id,
+                    )
                 )
-            )
-            if recent_msg:
-                # Still within cooldown window; prevent duplicate send
-                continue
+                if record_msg:
+                    # Message for this exact record was already queued; prevent duplicate send
+                    continue
+
+            # 2. General time-based cooldown window (only if cooldown_days > 0 and no source_record_id)
+            if rule.cooldown_days > 0 and source_record_id is None:
+                cooldown_cutoff = now - timedelta(days=rule.cooldown_days)
+                recent_msg = session.scalar(
+                    select(Message).where(
+                        Message.student_id == student_id,
+                        Message.template_name == template.name,
+                        Message.trigger_type == "AUTOMATED",
+                        Message.queued_at >= cooldown_cutoff,
+                    )
+                )
+                if recent_msg:
+                    # Still within cooldown window; prevent duplicate send
+                    continue
 
         # Resolve recipient
         res = get_eligible_recipients(session, target_type="STUDENT", target_ids=[student_id] if student_id else None)
@@ -1138,7 +1162,8 @@ def trigger_automation_event(
                 category=template.category,
                 trigger_type="AUTOMATED",
                 source_module=event_type,
-                environment=cfg.get("whatsapp_environment", "DEVELOPMENT"),
+                source_record_id=source_record_id,
+                environment=cfg.get("whatsapp_environment", "PRODUCTION"),
             )
             queued_count += 1
 

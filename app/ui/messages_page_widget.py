@@ -291,9 +291,9 @@ class MessagesPageWidget(QWidget):
         top_bar.addLayout(title_box)
         top_bar.addStretch()
 
-        self.env_indicator = QLabel("DEVELOPMENT")
+        self.env_indicator = QLabel("PRODUCTION SENDER")
         self.env_indicator.setStyleSheet(
-            "background-color: #FEF3C7; color: #B45309; padding: 5px 12px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+            "background-color: #DCFCE7; color: #15803D; padding: 5px 12px; border-radius: 12px; font-weight: 700; font-size: 11px;"
         )
         top_bar.addWidget(self.env_indicator)
 

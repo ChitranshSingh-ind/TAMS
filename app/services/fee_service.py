@@ -494,6 +494,7 @@ def record_payment(
             },
             batch_id=fee.batch_id,
             student_id=fee.student_id,
+            source_record_id=payment.id,
         )
     except Exception:
         pass

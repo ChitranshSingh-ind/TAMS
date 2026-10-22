@@ -235,6 +235,7 @@ def save_test_results(
                 },
                 batch_id=test.batch_id,
                 student_id=s_id,
+                source_record_id=test.id,
             )
     except Exception:
         # Non-blocking notification dispatch

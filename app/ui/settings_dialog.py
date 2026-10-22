@@ -709,9 +709,9 @@ class SettingsDialog(QDialog):
         env_header.addWidget(env_title)
         env_header.addStretch()
 
-        self.wa_env_badge = QLabel("DEVELOPMENT")
+        self.wa_env_badge = QLabel("PRODUCTION")
         self.wa_env_badge.setStyleSheet(
-            "background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+            "background-color: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
         )
         env_header.addWidget(self.wa_env_badge)
         env_card_layout.addLayout(env_header)
@@ -719,13 +719,12 @@ class SettingsDialog(QDialog):
         env_row = QHBoxLayout()
         env_row.addWidget(QLabel("Current Mode:"))
         self.wa_env_combo = QComboBox()
-        self.wa_env_combo.addItem("Development (Meta Test Sender Number)", "DEVELOPMENT")
         self.wa_env_combo.addItem("Production (Sir's Verified WhatsApp Number)", "PRODUCTION")
         self.wa_env_combo.currentIndexChanged.connect(self._on_whatsapp_env_changed)
         env_row.addWidget(self.wa_env_combo, 1)
         env_card_layout.addLayout(env_row)
 
-        env_hint = QLabel("💡 In Development Mode, messages can only be delivered to phone numbers registered under 'To' in Meta WhatsApp dashboard.")
+        env_hint = QLabel("💡 In Production Mode, messages are delivered to registered students and parent WhatsApp numbers.")
         env_hint.setWordWrap(True)
         env_hint.setObjectName("cardText")
         env_card_layout.addWidget(env_hint)
@@ -832,7 +831,7 @@ class SettingsDialog(QDialog):
             ensure_messaging_seed_data(session)
             cfg = get_messaging_config(session)
 
-            env = cfg.get("whatsapp_environment", "DEVELOPMENT")
+            env = cfg.get("whatsapp_environment", "PRODUCTION")
             idx = self.wa_env_combo.findData(env)
             if idx >= 0:
                 self.wa_env_combo.setCurrentIndex(idx)
@@ -848,17 +847,10 @@ class SettingsDialog(QDialog):
             self.wa_new_token_input.setVisible(False)
 
     def _on_whatsapp_env_changed(self):
-        env = self.wa_env_combo.currentData()
-        if env == "PRODUCTION":
-            self.wa_env_badge.setText("PRODUCTION (LIVE NUMBER)")
-            self.wa_env_badge.setStyleSheet(
-                "background-color: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
-            )
-        else:
-            self.wa_env_badge.setText("DEVELOPMENT (META TEST SENDER)")
-            self.wa_env_badge.setStyleSheet(
-                "background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
-            )
+        self.wa_env_badge.setText("PRODUCTION (LIVE NUMBER)")
+        self.wa_env_badge.setStyleSheet(
+            "background-color: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+        )
 
     def _on_wa_replace_token(self):
         self.wa_new_token_input.setVisible(True)

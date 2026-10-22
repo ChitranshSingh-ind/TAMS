@@ -94,12 +94,12 @@ class SendTestMessageDialog(QDialog):
         layout.addWidget(title)
 
         banner = QLabel(
-            "<b>Important:</b> In Meta Developer Test Mode, messages can only be delivered "
-            "to phone numbers explicitly registered under <i>'To'</i> in the Meta WhatsApp Getting Started dashboard."
+            "<b>Production Mode:</b> Messages are sent directly through your verified WhatsApp Business Account "
+            "to the entered recipient mobile number."
         )
         banner.setWordWrap(True)
         banner.setStyleSheet(
-            "background-color: #FEF3C7; color: #92400E; padding: 10px; border-radius: 6px; font-size: 12px;"
+            "background-color: #DCFCE7; color: #166534; padding: 10px; border-radius: 6px; font-size: 12px;"
         )
         layout.addWidget(banner)
 
@@ -221,7 +221,7 @@ class SendTestMessageDialog(QDialog):
                 f"❌ Meta API rejected the message:\n\n"
                 f"Error Code: {res.error_code}\n"
                 f"Details: {res.error_message}\n\n"
-                f"Note: In test mode, verify that {e164} is added as a permitted test recipient in Meta Developer Portal.",
+                f"Please verify that the recipient number {e164} is active and your WhatsApp access token is valid.",
             )
 
 
@@ -358,9 +358,9 @@ class MessagingSettingsWidget(QWidget):
         top_row.addWidget(header_title)
         top_row.addStretch()
 
-        self.env_badge = QLabel("DEVELOPMENT (TEST SENDER)")
+        self.env_badge = QLabel("PRODUCTION (SIR'S LIVE NUMBER)")
         self.env_badge.setStyleSheet(
-            "background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+            "background-color: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
         )
         top_row.addWidget(self.env_badge)
         main_layout.addLayout(top_row)
@@ -450,7 +450,6 @@ class MessagingSettingsWidget(QWidget):
         env_layout = QHBoxLayout(env_box)
 
         self.env_combo = QComboBox()
-        self.env_combo.addItem("Development (Meta Test Sender Number)", "DEVELOPMENT")
         self.env_combo.addItem("Production (Sir's Verified WhatsApp Number)", "PRODUCTION")
         self.env_combo.currentIndexChanged.connect(self._on_env_changed)
         env_lbl = QLabel("Operating Environment:")
@@ -722,7 +721,7 @@ class MessagingSettingsWidget(QWidget):
             ensure_messaging_seed_data(session)
             cfg = get_messaging_config(session)
 
-            env = cfg.get("whatsapp_environment", "DEVELOPMENT")
+            env = cfg.get("whatsapp_environment", "PRODUCTION")
             idx = self.env_combo.findData(env)
             if idx >= 0:
                 self.env_combo.setCurrentIndex(idx)
@@ -761,16 +760,10 @@ class MessagingSettingsWidget(QWidget):
         self._update_env_badge(env)
 
     def _update_env_badge(self, env: str):
-        if env == "PRODUCTION":
-            self.env_badge.setText("PRODUCTION (SIR'S LIVE NUMBER)")
-            self.env_badge.setStyleSheet(
-                "background-color: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
-            )
-        else:
-            self.env_badge.setText("DEVELOPMENT (META TEST SENDER)")
-            self.env_badge.setStyleSheet(
-                "background-color: #FEF3C7; color: #B45309; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
-            )
+        self.env_badge.setText("PRODUCTION (SIR'S LIVE NUMBER)")
+        self.env_badge.setStyleSheet(
+            "background-color: #DCFCE7; color: #15803D; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px;"
+        )
 
     def _on_replace_token(self):
         self.new_token_input.setVisible(True)

@@ -88,7 +88,7 @@ class Message(Base):
     status: Mapped[str] = mapped_column(String(30), default="QUEUED", index=True)
     provider: Mapped[str] = mapped_column(String(50), default="WHATSAPP_CLOUD")
     provider_message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    environment: Mapped[str] = mapped_column(String(20), default="DEVELOPMENT")  # DEVELOPMENT, PRODUCTION
+    environment: Mapped[str] = mapped_column(String(20), default="PRODUCTION")  # DEVELOPMENT, PRODUCTION
 
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     max_retries: Mapped[int] = mapped_column(Integer, default=3)

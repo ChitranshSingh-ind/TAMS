@@ -25,7 +25,7 @@ from app.database.connection import DATA_DIR
 logger = logging.getLogger("TAMS.WhatsAppProvider")
 
 # Default Meta Graph API version
-DEFAULT_GRAPH_API_VERSION = "v21.0"
+DEFAULT_GRAPH_API_VERSION = "v26.0"
 META_GRAPH_BASE_URL = "https://graph.facebook.com"
 
 # Secure credential storage file with 0600 permissions
@@ -206,9 +206,9 @@ def is_date_key(key: str | None) -> bool:
 
 @dataclass
 class WhatsAppConfig:
-    environment: str = "DEVELOPMENT"  # "DEVELOPMENT" or "PRODUCTION"
-    phone_number_id: str = ""
-    waba_id: str = ""
+    environment: str = "PRODUCTION"  # "DEVELOPMENT" or "PRODUCTION"
+    phone_number_id: str = "1480753541781147"
+    waba_id: str = "970600618872001"
     api_version: str = DEFAULT_GRAPH_API_VERSION
     access_token: str = ""
 

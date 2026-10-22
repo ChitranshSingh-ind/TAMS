@@ -598,3 +598,130 @@ def test_main_window_messages_page_navigation(qapp):
     assert hasattr(win, "messages_page")
     assert win.messages_page.tabs.count() == 5
     win.close()
+
+
+def test_default_whatsapp_credentials_and_environment():
+    from app.services.messaging_service import DEFAULT_CONFIGS
+    from app.services.whatsapp_provider import DEFAULT_GRAPH_API_VERSION, WhatsAppConfig
+
+    assert DEFAULT_CONFIGS["whatsapp_environment"] == "PRODUCTION"
+    assert DEFAULT_CONFIGS["whatsapp_phone_number_id"] == "1480753541781147"
+    assert DEFAULT_CONFIGS["whatsapp_waba_id"] == "970600618872001"
+    assert DEFAULT_CONFIGS["whatsapp_api_version"] == "v26.0"
+    assert DEFAULT_GRAPH_API_VERSION == "v26.0"
+
+    cfg = WhatsAppConfig()
+    assert cfg.environment == "PRODUCTION"
+    assert cfg.phone_number_id == "1480753541781147"
+    assert cfg.waba_id == "970600618872001"
+    assert cfg.api_version == "v26.0"
+
+
+def test_test_results_automation_deduplication_and_multiple_tests():
+    with SessionLocal() as session:
+        ensure_messaging_seed_data(session)
+
+        # Setup test parent, batch, student
+        from app.database.models.parent import Parent
+        parent = Parent(name="Result Parent", phone="+919876543111")
+        session.add(parent)
+        session.flush()
+
+        batch = Batch(name="Test Batch Results", days="Mon,Tue")
+        session.add(batch)
+        session.flush()
+
+        student = Student(
+            admission_number="ADM-TEST-RES-1",
+            first_name="Ananya",
+            last_name="Sharma",
+            parent_id=parent.id,
+            batch_id=batch.id,
+            status="ACTIVE",
+        )
+        session.add(student)
+        session.flush()
+
+        # Enable TEST_RESULT rule
+        rule = session.scalar(select(NotificationRule).where(NotificationRule.trigger_event == "TEST_RESULT"))
+        orig_enabled = rule.is_enabled if rule else False
+        orig_cooldown = rule.cooldown_days if rule else 0
+        if rule:
+            rule.is_enabled = True
+            rule.cooldown_days = 0
+            session.flush()
+
+        # 1. Trigger Test 1 (ID: 991)
+        count1 = trigger_automation_event(
+            session,
+            event_type="TEST_RESULT",
+            event_data={
+                "marks": "95",
+                "max_marks": "100",
+                "percentage": "95.0",
+                "test_name": "Math Test 1",
+                "test_date": "2026-10-22",
+                "batch_avg": "90.0",
+            },
+            batch_id=batch.id,
+            student_id=student.id,
+            source_record_id=991,
+        )
+        assert count1 == 1
+
+        # 2. Re-triggering the same Test 1 (ID: 991) must be deduplicated (count 0)
+        count_dup = trigger_automation_event(
+            session,
+            event_type="TEST_RESULT",
+            event_data={
+                "marks": "95",
+                "max_marks": "100",
+                "percentage": "95.0",
+                "test_name": "Math Test 1",
+                "test_date": "2026-10-22",
+                "batch_avg": "90.0",
+            },
+            batch_id=batch.id,
+            student_id=student.id,
+            source_record_id=991,
+        )
+        assert count_dup == 0
+
+        # 3. Triggering a DIFFERENT Test 2 (ID: 992) on the same day must succeed
+        count2 = trigger_automation_event(
+            session,
+            event_type="TEST_RESULT",
+            event_data={
+                "marks": "88",
+                "max_marks": "100",
+                "percentage": "88.0",
+                "test_name": "Science Test 2",
+                "test_date": "2026-10-22",
+                "batch_avg": "85.0",
+            },
+            batch_id=batch.id,
+            student_id=student.id,
+            source_record_id=992,
+        )
+        assert count2 == 1
+
+        # Cleanup
+        msgs = session.scalars(select(Message).where(Message.student_id == student.id)).all()
+        for m in msgs:
+            session.delete(m)
+        if rule:
+            rule.is_enabled = orig_enabled
+            rule.cooldown_days = orig_cooldown
+        session.delete(student)
+        session.delete(batch)
+        session.delete(parent)
+        session.commit()
+
+
+def test_messaging_settings_widget_no_development_option(qapp):
+    widget = MessagingSettingsWidget()
+    # Ensure env_combo only has PRODUCTION and no DEVELOPMENT option
+    items = [widget.env_combo.itemData(i) for i in range(widget.env_combo.count())]
+    assert "DEVELOPMENT" not in items
+    assert "PRODUCTION" in items
+

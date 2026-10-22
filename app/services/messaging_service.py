@@ -152,8 +152,19 @@ DEFAULT_TEMPLATES: list[dict[str, Any]] = [
         "associated_trigger": "CONSECUTIVE_ABSENCE",
     },
     {
+        "name": "test_result_template",
+        "meta_template_name": "test_result_template",
+        "category": "UTILITY",
+        "language": "en",
+        "body": "Dear Parent, {{student_name}} scored {{marks}}/{{max_marks}} ({{percentage}}%) in {{test_name}} on {{test_date}}. Batch Average: {{batch_avg}}%. Vishal Sir's Coaching.\n*If your child has scored less marks then average then contact us*.",
+        "parameters_json": '["student_name", "marks", "max_marks", "percentage", "test_name", "test_date", "batch_avg"]',
+        "is_active": True,
+        "meta_status": "LOCAL_ONLY",
+        "associated_trigger": "TEST_RESULT",
+    },
+    {
         "name": "test_result_notification",
-        "meta_template_name": "test_result_notification",
+        "meta_template_name": "test_result_template",
         "category": "UTILITY",
         "language": "en",
         "body": "Dear Parent, {{student_name}} scored {{marks}}/{{max_marks}} ({{percentage}}%) in {{test_name}} on {{test_date}}. Batch Average: {{batch_avg}}%. Vishal Sir's Coaching.\n*If your child has scored less marks then average then contact us*.",
@@ -181,7 +192,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "trigger_event": "FEE_DUE",
         "is_enabled": False,  # DISABLED BY DEFAULT
         "days_offset": -3,
-        "cooldown_days": 3,
+        "cooldown_days": 0,
         "template_name": "fee_due_reminder",
     },
     {
@@ -189,7 +200,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "trigger_event": "FEE_OVERDUE",
         "is_enabled": False,  # DISABLED BY DEFAULT
         "days_offset": 1,
-        "cooldown_days": 5,
+        "cooldown_days": 0,
         "template_name": "fee_overdue_reminder",
     },
     {
@@ -197,7 +208,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "trigger_event": "PAYMENT_RECEIPT",
         "is_enabled": False,  # DISABLED BY DEFAULT
         "days_offset": 0,
-        "cooldown_days": 1,
+        "cooldown_days": 0,
         "template_name": "payment_receipt",
     },
     {
@@ -205,7 +216,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "trigger_event": "ABSENCE",
         "is_enabled": False,  # DISABLED BY DEFAULT
         "days_offset": 0,
-        "cooldown_days": 1,
+        "cooldown_days": 0,
         "template_name": "absence_alert",
     },
     {
@@ -213,7 +224,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "trigger_event": "CONSECUTIVE_ABSENCE",
         "is_enabled": False,  # DISABLED BY DEFAULT
         "min_consecutive_days": 2,
-        "cooldown_days": 3,
+        "cooldown_days": 0,
         "template_name": "repeated_absence_alert",
     },
     {
@@ -222,7 +233,7 @@ DEFAULT_NOTIFICATION_RULES: list[dict[str, Any]] = [
         "is_enabled": False,  # DISABLED BY DEFAULT
         "days_offset": 0,
         "cooldown_days": 0,
-        "template_name": "test_result_notification",
+        "template_name": "test_result_template",
     },
 ]
 
@@ -273,15 +284,14 @@ def ensure_messaging_seed_data(session: Session) -> None:
                 trigger_event=r["trigger_event"],
                 is_enabled=r["is_enabled"],
                 days_offset=r.get("days_offset", 0),
-                cooldown_days=r.get("cooldown_days", 0 if r["trigger_event"] == "TEST_RESULT" else 2),
+                cooldown_days=0,
                 min_consecutive_days=r.get("min_consecutive_days", 2),
                 template_id=tmpl_map.get(r["template_name"]),
             ))
         else:
-            # Sync rule parameters like cooldown_days for TEST_RESULT
+            # Sync cooldown_days to 0 for all notification rules
             curr_rule = existing_rules[r["name"]]
-            if r["trigger_event"] == "TEST_RESULT":
-                curr_rule.cooldown_days = 0
+            curr_rule.cooldown_days = 0
 
     session.commit()
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tams"
-version = "2.1.1"
+version = "2.1.2"
 description = "TAMS — Tuition & Coaching Management System with Automated Companion Messaging"
 readme = "README.md"
 authors = [

@@ -725,3 +725,16 @@ def test_messaging_settings_widget_no_development_option(qapp):
     assert "DEVELOPMENT" not in items
     assert "PRODUCTION" in items
 
+
+def test_all_notification_rules_cooldown_zero():
+    from app.services.messaging_service import DEFAULT_NOTIFICATION_RULES
+    for rule in DEFAULT_NOTIFICATION_RULES:
+        assert rule["cooldown_days"] == 0, f"Rule {rule['name']} cooldown_days is not 0"
+
+    with SessionLocal() as session:
+        ensure_messaging_seed_data(session)
+        rules = session.scalars(select(NotificationRule)).all()
+        for r in rules:
+            assert r.cooldown_days == 0, f"DB Rule {r.name} cooldown_days is {r.cooldown_days}, expected 0"
+
+

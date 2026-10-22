@@ -140,7 +140,7 @@ class NotificationRule(Base):
     )
 
     days_offset: Mapped[int] = mapped_column(Integer, default=0)
-    cooldown_days: Mapped[int] = mapped_column(Integer, default=2)
+    cooldown_days: Mapped[int] = mapped_column(Integer, default=0)
     min_consecutive_days: Mapped[int] = mapped_column(Integer, default=2)
     custom_conditions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 

@@ -143,3 +143,9 @@ To build standalone `.exe` binaries and the Inno Setup installer on a Windows de
   - **Linux**: `~/.local/share/TAMS/logs/coaching_helper.log`
 - **Parameter Mismatch Errors (`PARAM_MISMATCH`)**:
   Occurs when an automation rule sends fewer parameters than the Meta template expects. Edit the template in **Messages → Templates** to adjust parameter placeholders.
+
+---
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0** (GPLv3) - see the [LICENSE](LICENSE) file for details.

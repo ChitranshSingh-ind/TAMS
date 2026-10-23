@@ -148,4 +148,4 @@ To build standalone `.exe` binaries and the Inno Setup installer on a Windows de
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** (GPLv3) - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU Affero General Public License v3.0** (AGPLv3) - see the [LICENSE](LICENSE) file for details.

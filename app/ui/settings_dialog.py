@@ -1340,6 +1340,12 @@ class SettingsDialog(QDialog):
         self.check_updates_btn.clicked.connect(self._on_check_updates_clicked)
         m_header.addWidget(self.check_updates_btn)
         m_layout.addLayout(m_header)
+
+        self.auto_check_updates_cb = QCheckBox("Automatically check for system updates when TAMS opens")
+        self.auto_check_updates_cb.setStyleSheet("color: #1F2937; font-size: 13px; font-weight: 500; margin-top: 4px;")
+        self.auto_check_updates_cb.toggled.connect(self._on_auto_check_updates_toggled)
+        m_layout.addWidget(self.auto_check_updates_cb)
+
         layout.addWidget(maint_card)
 
         layout.addStretch()
@@ -1413,6 +1419,23 @@ class SettingsDialog(QDialog):
 
             self.backups_table.setCellWidget(row, 3, btn_widget)
         auto_fit_columns(self.backups_table)
+
+        # 4. Auto-update startup checkbox state
+        try:
+            with SessionLocal() as session:
+                cfg = get_messaging_config(session)
+                self.auto_check_updates_cb.blockSignals(True)
+                self.auto_check_updates_cb.setChecked(cfg.get("auto_check_updates_on_startup", "true").lower() == "true")
+                self.auto_check_updates_cb.blockSignals(False)
+        except Exception:
+            pass
+
+    def _on_auto_check_updates_toggled(self, checked: bool):
+        try:
+            with SessionLocal() as session:
+                update_messaging_config(session, {"auto_check_updates_on_startup": "true" if checked else "false"})
+        except Exception:
+            pass
 
     def _on_create_backup_clicked(self):
         label = self.backup_label_input.text().strip() or None

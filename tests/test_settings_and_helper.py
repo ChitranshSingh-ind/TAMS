@@ -319,3 +319,88 @@ def test_app_update_dialog_ui(qapp):
     assert dlg.update_btn.isEnabled()
     assert dlg.cancel_btn.text() == "Remind Me Later"
 
+
+def test_main_window_auto_check_updates_on_startup(qapp):
+    from app.ui.main_window import MainWindow
+    from app.ui.app_update_dialog import AppUpdateDialog
+
+    update_payload = {
+        "status": "update_available",
+        "message": "Update v2.5.0 is available.",
+        "current_version": "2.1.3",
+        "latest_version": "2.5.0",
+        "release_notes": "New features",
+    }
+
+    win = MainWindow()
+    win.show()
+
+    dialog_opened = []
+
+    def mock_dialog_exec(self):
+        dialog_opened.append(self.update_info)
+        return 0
+
+    with mock.patch("app.services.coaching_helper_service.check_for_updates", return_value=update_payload):
+        with mock.patch.object(AppUpdateDialog, "exec", mock_dialog_exec):
+            # Temporarily unmask test env check inside the method
+            with mock.patch.dict(os.environ, {}, clear=False):
+                if "PYTEST_CURRENT_TEST" in os.environ:
+                    del os.environ["PYTEST_CURRENT_TEST"]
+                try:
+                    win.check_for_system_updates_on_startup()
+                    assert hasattr(win, "_startup_update_worker")
+                    win._startup_update_worker.wait(5000)
+                    qapp.processEvents()
+                    assert len(dialog_opened) == 1
+                    assert dialog_opened[0]["latest_version"] == "2.5.0"
+                finally:
+                    os.environ["PYTEST_CURRENT_TEST"] = "1"
+
+    win.close()
+
+
+def test_main_window_auto_check_updates_disabled_by_config(qapp):
+    from app.ui.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+
+    with SessionLocal() as session:
+        update_messaging_config(session, {"auto_check_updates_on_startup": "false"})
+
+    with mock.patch.dict(os.environ, {}, clear=False):
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+        try:
+            win.check_for_system_updates_on_startup()
+            assert not hasattr(win, "_startup_update_worker")
+        finally:
+            os.environ["PYTEST_CURRENT_TEST"] = "1"
+            with SessionLocal() as session:
+                update_messaging_config(session, {"auto_check_updates_on_startup": "true"})
+
+    win.close()
+
+
+def test_settings_dialog_auto_update_toggle(qapp):
+    dialog = SettingsDialog()
+    dialog.load_backup_page()
+    assert hasattr(dialog, "auto_check_updates_cb")
+    assert dialog.auto_check_updates_cb.isChecked() is True
+
+    # Toggle off
+    dialog.auto_check_updates_cb.setChecked(False)
+    with SessionLocal() as session:
+        cfg = get_messaging_config(session)
+        assert cfg.get("auto_check_updates_on_startup") == "false"
+
+    # Toggle back on
+    dialog.auto_check_updates_cb.setChecked(True)
+    with SessionLocal() as session:
+        cfg = get_messaging_config(session)
+        assert cfg.get("auto_check_updates_on_startup") == "true"
+
+    dialog.close()
+
+

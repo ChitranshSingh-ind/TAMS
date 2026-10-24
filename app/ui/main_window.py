@@ -276,6 +276,41 @@ class MainWindow(
         if not os.environ.get("PYTEST_CURRENT_TEST"):
             self.coaching_helper.start()
 
+        # Check for system updates automatically on startup
+        if not os.environ.get("PYTEST_CURRENT_TEST") and not os.environ.get("TAMS_DISABLE_AUTO_UPDATE"):
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(1500, self.check_for_system_updates_on_startup)
+
+    def check_for_system_updates_on_startup(self):
+        """
+        Automatically searches for system updates in the background on startup.
+        If an update is available, prompts the user to download and install it.
+        """
+        if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("TAMS_DISABLE_AUTO_UPDATE"):
+            return
+
+        try:
+            with SessionLocal() as session:
+                cfg = get_messaging_config(session)
+                if cfg.get("auto_check_updates_on_startup", "true").lower() != "true":
+                    return
+        except Exception:
+            pass
+
+        from app.ui.app_update_dialog import AppUpdateDialog, UpdateCheckWorker
+
+        self._startup_update_worker = UpdateCheckWorker()
+
+        def _on_startup_check_finished(res: dict):
+            if not self.isVisible():
+                return
+            if res.get("status") == "update_available":
+                dlg = AppUpdateDialog(res, parent=self)
+                dlg.exec()
+
+        self._startup_update_worker.finished.connect(_on_startup_check_finished)
+        self._startup_update_worker.start()
+
     def load_coaching_profile(self):
         try:
             with SessionLocal() as session:
@@ -301,6 +336,12 @@ class MainWindow(
             pass
 
     def closeEvent(self, event):
+        if hasattr(self, "_startup_update_worker") and self._startup_update_worker.isRunning():
+            try:
+                self._startup_update_worker.quit()
+                self._startup_update_worker.wait(500)
+            except Exception:
+                pass
         if hasattr(self, "coaching_helper") and self.coaching_helper.isRunning():
             self.coaching_helper.stop()
         super().closeEvent(event)

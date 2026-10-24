@@ -36,18 +36,6 @@ from app.ui.theme import (
 )
 
 
-class UpdateCheckWorker(QThread):
-    finished = pyqtSignal(dict)
-
-    def run(self):
-        from app.services.coaching_helper_service import check_for_updates
-        try:
-            res = check_for_updates()
-        except Exception as e:
-            res = {"status": "error", "message": str(e)}
-        self.finished.emit(res)
-
-
 class UpdateDownloadWorker(QThread):
     progress = pyqtSignal(int, int)  # (downloaded_bytes, total_bytes)
     finished = pyqtSignal(str)       # (downloaded_file_path)

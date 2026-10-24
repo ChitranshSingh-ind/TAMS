@@ -81,7 +81,6 @@ DEFAULT_CONFIGS: dict[str, str] = {
     # Backup & Maintenance
     "max_backup_retention": "10",
     "auto_backup_on_exit": "false",
-    "auto_check_updates_on_startup": "true",
 }
 
 

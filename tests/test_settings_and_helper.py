@@ -298,6 +298,33 @@ def test_check_for_updates_asset_extraction():
         assert res.get("asset_size") == 52428800
 
 
+def test_check_for_updates_fallback_on_rate_limit():
+    import urllib.error
+
+    # Simulate GitHub API 403 Rate Limit Error
+    err = urllib.error.HTTPError(
+        url="https://api.github.com/repos/ChitranshSingh-ind/TAMS/releases/latest",
+        code=403,
+        msg="rate limit exceeded",
+        hdrs={},
+        fp=None,
+    )
+
+    class MockRedirectOpener:
+        def open(self, req, timeout=5.0):
+            # Simulate 302 redirect response with Location header
+            class MockRedirectResp:
+                headers = {"Location": "https://github.com/ChitranshSingh-ind/TAMS/releases/tag/v3.0.0"}
+            return MockRedirectResp()
+
+    with mock.patch("urllib.request.urlopen", side_effect=err):
+        with mock.patch("urllib.request.build_opener", return_value=MockRedirectOpener()):
+            res = check_for_updates()
+            assert res.get("status") == "update_available"
+            assert res.get("latest_version") == "3.0.0"
+            assert "v3.0.0" in res.get("download_url")
+
+
 def test_app_update_dialog_ui(qapp):
     from app.ui.app_update_dialog import AppUpdateDialog
 

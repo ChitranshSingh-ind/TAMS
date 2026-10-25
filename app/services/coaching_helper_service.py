@@ -426,7 +426,56 @@ def check_for_updates() -> dict[str, Any]:
                     "asset_size": asset_size,
                 }
     except Exception as e:
-        logger.debug("Update check returned offline/fallback: %s", e)
+        logger.debug("GitHub API check failed (%s), attempting web fallback...", e)
+        # Fallback: GitHub Releases /latest automatically redirects (302) to the latest tag page
+        # e.g., https://github.com/ChitranshSingh-ind/TAMS/releases/latest -> /releases/tag/vX.Y.Z
+        # This endpoint is never rate-limited.
+        try:
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None
+
+            web_url = "https://github.com/ChitranshSingh-ind/TAMS/releases/latest"
+            opener = urllib.request.build_opener(NoRedirect)
+            req = urllib.request.Request(web_url, headers={"User-Agent": f"TAMS-Desktop-App/{APP_VERSION}"})
+            loc = None
+            try:
+                resp = opener.open(req, timeout=5.0)
+                loc = resp.headers.get("Location")
+            except urllib.error.HTTPError as he:
+                loc = he.headers.get("Location")
+
+            if loc and "/releases/tag/" in loc:
+                tag_name = loc.split("/releases/tag/")[-1].strip().lstrip("v")
+                is_newer = False
+                if tag_name:
+                    try:
+                        from packaging.version import parse as parse_version
+                        is_newer = parse_version(tag_name) > parse_version(APP_VERSION)
+                    except Exception:
+                        cand_nums = [int(x) for x in re.findall(r"\d+", tag_name)]
+                        curr_nums = [int(x) for x in re.findall(r"\d+", APP_VERSION)]
+                        is_newer = cand_nums > curr_nums
+
+                installer_name = f"TAMS_Setup_v{tag_name}.exe"
+                download_url = f"https://github.com/ChitranshSingh-ind/TAMS/releases/download/v{tag_name}/{installer_name}"
+
+                return {
+                    "status": "update_available" if is_newer else "up_to_date",
+                    "message": f"Update v{tag_name} is available." if is_newer else "You are running the latest version of TAMS.",
+                    "current_version": APP_VERSION,
+                    "latest_version": tag_name or APP_VERSION,
+                    "is_up_to_date": not is_newer,
+                    "checked_at": datetime.now(timezone.utc).isoformat(),
+                    "release_notes": f"Release v{tag_name} is available on GitHub.",
+                    "release_url": loc,
+                    "download_url": download_url if is_newer else None,
+                    "asset_name": installer_name,
+                    "asset_size": 0,
+                }
+        except Exception as fb_err:
+            logger.debug("Fallback check also failed: %s", fb_err)
+
         return {
             "status": "error",
             "error": str(e),

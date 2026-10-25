@@ -20,7 +20,7 @@ page controller mixins from `app.ui.mixins`:
 
 import os
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -275,6 +275,7 @@ class MainWindow(
             app.aboutToQuit.connect(self.coaching_helper.stop)
         if not os.environ.get("PYTEST_CURRENT_TEST"):
             self.coaching_helper.start()
+            QTimer.singleShot(1500, self._check_startup_updates)
 
     def load_coaching_profile(self):
         try:
@@ -303,7 +304,35 @@ class MainWindow(
     def closeEvent(self, event):
         if hasattr(self, "coaching_helper") and self.coaching_helper.isRunning():
             self.coaching_helper.stop()
+        if hasattr(self, "_startup_update_worker") and self._startup_update_worker.isRunning():
+            self._startup_update_worker.wait(1000)
         super().closeEvent(event)
+
+    def _check_startup_updates(self):
+        """Check for updates in the background if enabled in settings."""
+        try:
+            with SessionLocal() as session:
+                ensure_messaging_seed_data(session)
+                cfg = get_messaging_config(session)
+                if cfg.get("auto_check_updates_on_startup", "true").lower() != "true":
+                    return
+        except Exception:
+            return
+
+        from app.ui.settings_dialog import UpdateCheckWorker
+
+        self._startup_update_worker = UpdateCheckWorker()
+        self._startup_update_worker.finished.connect(self._on_startup_update_result)
+        self._startup_update_worker.start()
+
+    def _on_startup_update_result(self, res: dict):
+        """Handle background update check result on startup."""
+        if not isinstance(res, dict) or res.get("status") != "update_available":
+            return
+
+        from app.ui.app_update_dialog import AppUpdateDialog
+        dlg = AppUpdateDialog(res, parent=self)
+        dlg.exec()
 
     def open_settings(self, initial_tab: int = 0):
         dialog = SettingsDialog(self, initial_tab=initial_tab)

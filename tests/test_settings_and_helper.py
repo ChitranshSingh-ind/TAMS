@@ -319,3 +319,58 @@ def test_app_update_dialog_ui(qapp):
     assert dlg.update_btn.isEnabled()
     assert dlg.cancel_btn.text() == "Remind Me Later"
 
+
+def test_settings_dialog_auto_check_updates_toggle(qapp):
+    with SessionLocal() as session:
+        update_messaging_config(session, {"auto_check_updates_on_startup": "true"})
+
+    dialog = SettingsDialog(initial_tab=4)
+    assert hasattr(dialog, "auto_check_updates_cb")
+    assert dialog.auto_check_updates_cb.isChecked() is True
+
+    # Toggle off
+    dialog.auto_check_updates_cb.setChecked(False)
+    with SessionLocal() as session:
+        cfg = get_messaging_config(session)
+        assert cfg.get("auto_check_updates_on_startup") == "false"
+
+    # Toggle on
+    dialog.auto_check_updates_cb.setChecked(True)
+    with SessionLocal() as session:
+        cfg = get_messaging_config(session)
+        assert cfg.get("auto_check_updates_on_startup") == "true"
+
+
+def test_main_window_startup_update_check(qapp):
+    from app.ui.main_window import MainWindow
+
+    window = MainWindow()
+
+    # Case 1: When update check is disabled in config
+    with SessionLocal() as session:
+        update_messaging_config(session, {"auto_check_updates_on_startup": "false"})
+
+    window._check_startup_updates()
+    assert not hasattr(window, "_startup_update_worker")
+
+    # Case 2: When enabled and an update is available, prompt dialog is triggered
+    with SessionLocal() as session:
+        update_messaging_config(session, {"auto_check_updates_on_startup": "true"})
+
+    mock_update_res = {
+        "status": "update_available",
+        "latest_version": "9.9.9",
+        "current_version": "2.1.2",
+        "release_notes": "Test release notes",
+    }
+
+    with mock.patch("app.ui.app_update_dialog.AppUpdateDialog.exec") as mock_exec:
+        window._on_startup_update_result(mock_update_res)
+        mock_exec.assert_called_once()
+
+    # Case 3: When no update is available (up_to_date), no dialog should be opened
+    with mock.patch("app.ui.app_update_dialog.AppUpdateDialog.exec") as mock_exec:
+        window._on_startup_update_result({"status": "up_to_date"})
+        mock_exec.assert_not_called()
+
+

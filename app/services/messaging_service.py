@@ -82,6 +82,11 @@ DEFAULT_CONFIGS: dict[str, str] = {
     "max_backup_retention": "10",
     "auto_backup_on_exit": "false",
     "auto_check_updates_on_startup": "true",
+    # Application Branding & Printable Documents
+    "app_name": "TAMS",
+    "app_logo_path": "",
+    "app_icon_path": "",
+    "admission_form_config": "",
 }
 
 

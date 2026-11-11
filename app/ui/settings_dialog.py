@@ -2,15 +2,17 @@ import sys
 from datetime import time
 from pathlib import Path
 from PyQt6.QtCore import QThread, QTimer, Qt, QTime, QUrl, pyqtSignal
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtGui import QDesktopServices, QIcon, QPixmap
 
 
 from PyQt6.QtWidgets import (
     QAbstractSpinBox,
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -50,6 +52,11 @@ from app.services.batch_service import (
     update_batch,
     reactivate_batch,
 )
+from app.services.branding_service import (
+    clear_branding_images,
+    resolve_app_branding,
+    save_branding_image,
+)
 from app.services.coaching_helper_service import (
     APP_VERSION,
     check_for_updates,
@@ -78,7 +85,6 @@ from app.ui.messaging_settings_widget import SendTestMessageDialog
 from app.ui.table_utils import TableSizingStrategy, auto_fit_columns, configure_table_ux
 
 
-
 from app.ui.theme import (
     CHEVRON_DOWN_DISABLED_PATH,
     CHEVRON_DOWN_PATH,
@@ -90,6 +96,7 @@ from app.ui.theme import (
     NAVY,
     TEXT,
     WHITE,
+    get_app_icon_path,
 )
 class TAMSTimeEdit(QTimeEdit):
     def __init__(self, parent=None):
@@ -262,6 +269,8 @@ class SettingsDialog(QDialog):
 
         self.setWindowTitle("TAMS Settings")
         self.resize(950, 680)
+        self._pending_logo_path: str = ""
+        self._pending_icon_path: str = ""
 
         self.setup_ui()
         self.apply_styles()
@@ -285,6 +294,7 @@ class SettingsDialog(QDialog):
 
         subtitle = QLabel("Manage your TAMS configuration")
         subtitle.setObjectName("settingsSubtitle")
+        self.settings_subtitle_label = subtitle
 
         title_layout = QVBoxLayout()
         title_layout.setSpacing(2)
@@ -390,6 +400,87 @@ class SettingsDialog(QDialog):
         layout.addWidget(title)
         layout.addWidget(description)
 
+        def req_p(label_text: str) -> QLabel:
+            lbl = QLabel(f"{label_text} <span style='color: #DC2626; font-weight: bold;'>*</span>:")
+            lbl.setTextFormat(Qt.TextFormat.RichText)
+            return lbl
+
+        def make_asset_picker_row(kind: str):
+            row_w = QWidget()
+            row_l = QHBoxLayout(row_w)
+            row_l.setContentsMargins(0, 0, 0, 0)
+            row_l.setSpacing(10)
+
+            preview = QLabel()
+            preview.setFixedSize(44, 44)
+            preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            preview.setStyleSheet(
+                f"background-color: {CREAM}; border: 1px solid {LIGHT_GOLD}; border-radius: 6px; padding: 3px;"
+            )
+
+            status_lbl = QLabel("Default")
+            status_lbl.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
+
+            browse_btn = QPushButton("Browse Image...")
+            browse_btn.setObjectName("secondaryButton")
+            browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            browse_btn.clicked.connect(lambda checked=False, k=kind: self._browse_branding_asset(k))
+
+            reset_btn = QPushButton("Reset to Default")
+            reset_btn.setObjectName("secondaryButton")
+            reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            reset_btn.clicked.connect(lambda checked=False, k=kind: self._reset_branding_asset(k))
+
+            row_l.addWidget(preview)
+            row_l.addWidget(status_lbl, 1)
+            row_l.addWidget(browse_btn)
+            row_l.addWidget(reset_btn)
+            return row_w, preview, status_lbl, browse_btn, reset_btn
+
+        # ── Card 0: Application Branding (Name, Logo & Icon) ─
+        branding_card = QFrame()
+        branding_card.setObjectName("settingsCard")
+        b_layout = QVBoxLayout(branding_card)
+        b_layout.setContentsMargins(22, 20, 22, 20)
+        b_layout.setSpacing(14)
+
+        b_title = QLabel("Application Branding")
+        b_title.setObjectName("cardTitle")
+        b_subtitle = QLabel(
+            "Customize the application name, top-bar & document logo, and window/taskbar icon."
+        )
+        b_subtitle.setObjectName("cardText")
+        b_layout.addWidget(b_title)
+        b_layout.addWidget(b_subtitle)
+
+        b_form = QFormLayout()
+        b_form.setSpacing(12)
+
+        self.gen_app_name_input = QLineEdit()
+        self.gen_app_name_input.setPlaceholderText("e.g. TAMS or Apex Portal")
+        b_form.addRow(req_p("Application Name"), self.gen_app_name_input)
+
+        (
+            logo_row,
+            self.gen_logo_preview,
+            self.gen_logo_status_lbl,
+            self.gen_logo_browse_btn,
+            self.gen_logo_reset_btn,
+        ) = make_asset_picker_row("logo")
+        b_form.addRow("App Logo (Header & Prints):", logo_row)
+
+        (
+            icon_row,
+            self.gen_icon_preview,
+            self.gen_icon_status_lbl,
+            self.gen_icon_browse_btn,
+            self.gen_icon_reset_btn,
+        ) = make_asset_picker_row("icon")
+        b_form.addRow("App Icon (Window & Taskbar):", icon_row)
+
+        b_layout.addLayout(b_form)
+        layout.addWidget(branding_card)
+
         # ── Card 1: Coaching Institute Profile ──────────────
         profile_card = QFrame()
         profile_card.setObjectName("settingsCard")
@@ -408,11 +499,6 @@ class SettingsDialog(QDialog):
 
         p_form = QFormLayout()
         p_form.setSpacing(12)
-
-        def req_p(label_text: str) -> QLabel:
-            lbl = QLabel(f"{label_text} <span style='color: #DC2626; font-weight: bold;'>*</span>:")
-            lbl.setTextFormat(Qt.TextFormat.RichText)
-            return lbl
 
         self.gen_coaching_name_input = QLineEdit()
         self.gen_coaching_name_input.setPlaceholderText("e.g. Apex Coaching Institute")
@@ -1591,11 +1677,78 @@ class SettingsDialog(QDialog):
         backup_dir = get_backup_directory()
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(backup_dir)))
 
+    def _update_branding_preview(self, kind: str, custom_path: str):
+        is_logo = (kind == "logo")
+        preview_lbl = self.gen_logo_preview if is_logo else self.gen_icon_preview
+        status_lbl = self.gen_logo_status_lbl if is_logo else self.gen_icon_status_lbl
+
+        raw = (custom_path or "").strip()
+        target_path = Path(raw) if raw and Path(raw).exists() else get_app_icon_path()
+        has_custom = bool(raw and Path(raw).exists())
+
+        pix = QPixmap(str(target_path))
+        if not pix.isNull():
+            preview_lbl.setPixmap(
+                pix.scaled(
+                    36,
+                    36,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        else:
+            preview_lbl.setText("—")
+
+        if has_custom:
+            status_lbl.setText(f"Custom: {target_path.name}")
+            status_lbl.setStyleSheet(f"color: {NAVY}; font-size: 12px; font-weight: 600;")
+        else:
+            status_lbl.setText("Using Built-in Default")
+            status_lbl.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
+
+    def _browse_branding_asset(self, kind: str):
+        label = "App Logo" if kind == "logo" else "App Icon"
+        file_filter = "Images (*.png *.jpg *.jpeg *.ico *.svg *.bmp *.webp)"
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            f"Select Custom {label}",
+            "",
+            file_filter,
+        )
+        if not filepath:
+            return
+        if kind == "logo":
+            self._pending_logo_path = filepath
+        else:
+            self._pending_icon_path = filepath
+        self._update_branding_preview(kind, filepath)
+
+    def _reset_branding_asset(self, kind: str):
+        if kind == "logo":
+            self._pending_logo_path = ""
+        else:
+            self._pending_icon_path = ""
+        self._update_branding_preview(kind, "")
+
     # ── TAB 1: GENERAL SETTINGS LOAD & SAVE ────────────────────────────────────
     def load_general_settings(self):
         with SessionLocal() as session:
             ensure_messaging_seed_data(session)
             cfg = get_messaging_config(session)
+            branding = resolve_app_branding(cfg)
+
+            app_name = branding["app_name"]
+            self.gen_app_name_input.setText(app_name)
+            self._pending_logo_path = cfg.get("app_logo_path", "") if branding["has_custom_logo"] else ""
+            self._pending_icon_path = cfg.get("app_icon_path", "") if branding["has_custom_icon"] else ""
+            self._update_branding_preview("logo", self._pending_logo_path)
+            self._update_branding_preview("icon", self._pending_icon_path)
+
+            self.setWindowTitle(f"{app_name} Settings")
+            if hasattr(self, "settings_subtitle_label"):
+                self.settings_subtitle_label.setText(f"Manage your {app_name} configuration")
+            if Path(branding["icon_path"]).exists():
+                self.setWindowIcon(QIcon(str(branding["icon_path"])))
 
             self.gen_coaching_name_input.setText(cfg.get("coaching_name", "TAMS Coaching Academy"))
             self.gen_tagline_input.setText(cfg.get("coaching_tagline", "Excellence in Education"))
@@ -1624,6 +1777,12 @@ class SettingsDialog(QDialog):
             self.gen_mask_phone_numbers_cb.setChecked(cfg.get("ui_mask_phone_numbers", "false").lower() == "true")
 
     def _on_save_general_settings(self):
+        app_name = self.gen_app_name_input.text().strip()
+        if not app_name:
+            QMessageBox.warning(self, "Validation Error", "Application Name is required.")
+            self.gen_app_name_input.setFocus()
+            return
+
         name = self.gen_coaching_name_input.text().strip()
         if not name:
             QMessageBox.warning(self, "Validation Error", "Coaching Name is required.")
@@ -1636,9 +1795,28 @@ class SettingsDialog(QDialog):
             self.gen_academic_session_input.setFocus()
             return
 
+        try:
+            if self._pending_logo_path.strip():
+                saved_logo_path = save_branding_image(self._pending_logo_path.strip(), "logo")
+            else:
+                clear_branding_images("logo")
+                saved_logo_path = ""
+
+            if self._pending_icon_path.strip():
+                saved_icon_path = save_branding_image(self._pending_icon_path.strip(), "icon")
+            else:
+                clear_branding_images("icon")
+                saved_icon_path = ""
+        except Exception as exc:
+            QMessageBox.warning(self, "Branding Image Error", f"Could not save branding image:\n{exc}")
+            return
+
         curr_sym = self.gen_currency_symbol_input.text().strip() or "₹"
 
         new_configs = {
+            "app_name": app_name,
+            "app_logo_path": saved_logo_path,
+            "app_icon_path": saved_icon_path,
             "coaching_name": name,
             "coaching_tagline": self.gen_tagline_input.text().strip(),
             "academic_session": session_val,
@@ -1656,10 +1834,20 @@ class SettingsDialog(QDialog):
         with SessionLocal() as session:
             update_messaging_config(session, new_configs)
 
+        branding = resolve_app_branding(new_configs)
+        qapp = QApplication.instance()
+        if qapp:
+            qapp.setApplicationName(branding["app_name"])
+            qapp.setApplicationDisplayName(branding["app_name"])
+            if Path(branding["icon_path"]).exists():
+                qapp.setWindowIcon(QIcon(str(branding["icon_path"])))
+        if self.parent() and hasattr(self.parent(), "load_coaching_profile"):
+            self.parent().load_coaching_profile()
+
         QMessageBox.information(
             self,
             "Settings Saved",
-            "General coaching settings have been saved successfully!"
+            "General coaching & branding settings have been saved successfully!"
         )
         self.load_general_settings()
 

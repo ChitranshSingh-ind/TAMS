@@ -91,6 +91,16 @@ class StudentsMixin:
         header_layout.addLayout(title_box)
         header_layout.addStretch()
 
+        # Admission Form button
+        self.admission_form_button = QPushButton("📄 Admission Form")
+        self.admission_form_button.setObjectName("bulkActionsButton")
+        self.admission_form_button.setFixedHeight(38)
+        self.admission_form_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+        self.admission_form_button.clicked.connect(lambda: self.open_admission_form_dialog(None))
+        header_layout.addWidget(self.admission_form_button, alignment=Qt.AlignmentFlag.AlignVCenter)
+
         # Bulk actions button
         self.bulk_actions_button = QPushButton("👥 Bulk Actions")
         self.bulk_actions_button.setObjectName("bulkActionsButton")
@@ -188,7 +198,7 @@ class StudentsMixin:
         )
         configure_table_ux(
             self.students_table,
-            column_widths=[130, 200, 170, 130, 140, 100, 160],
+            column_widths=[130, 200, 170, 130, 140, 100, 225],
             stretch_column=1,
             flexible_columns=[1, 2],
             fixed_columns=[6],
@@ -355,8 +365,34 @@ class StudentsMixin:
                         self.edit_student(student_id)
                 )
 
+                # Form button (editable/printable admission form)
+                form_button = QPushButton("Form")
+                form_button.setFixedSize(56, 28)
+                form_button.setCursor(
+                    Qt.CursorShape.PointingHandCursor
+                )
+                form_button.setToolTip("Open editable & printable admission form")
+                form_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #FEFEFE;
+                        color: #012D54;
+                        border: 1px solid #D9B85F;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #E9DEBA;
+                    }
+                """)
+                form_button.clicked.connect(
+                    lambda checked=False, student_id=student.id:
+                        self.open_admission_form_dialog(student_id)
+                )
+
                 action_layout.addWidget(view_button)
                 action_layout.addWidget(edit_button)
+                action_layout.addWidget(form_button)
 
                 self.students_table.setCellWidget(
                     row,
@@ -366,6 +402,12 @@ class StudentsMixin:
 
         if hasattr(self, "filter_students_table"):
             self.filter_students_table()
+
+    def open_admission_form_dialog(self, student_id: int | None = None, parent_widget=None):
+        """Open the customizable & printable Admission Form dialog."""
+        from app.ui.print_dialogs import AdmissionFormDialog
+        dialog = AdmissionFormDialog(student_id=student_id, parent=parent_widget or self)
+        dialog.exec()
 
     def filter_students_table(self):
         if not hasattr(self, "student_search_input") or not hasattr(self, "students_table"):
@@ -817,7 +859,11 @@ class StudentsMixin:
         layout.setContentsMargins(25, 25, 25, 25)
         layout.setSpacing(15)
 
-        # Title
+        # Title + Admission Form Print action
+        profile_hdr = QHBoxLayout()
+        profile_title_col = QVBoxLayout()
+        profile_title_col.setSpacing(2)
+
         title = QLabel(student_name)
         title.setObjectName("studentProfileTitle")
 
@@ -826,8 +872,33 @@ class StudentsMixin:
         )
         subtitle.setObjectName("studentProfileSubtitle")
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        profile_title_col.addWidget(title)
+        profile_title_col.addWidget(subtitle)
+        profile_hdr.addLayout(profile_title_col)
+        profile_hdr.addStretch()
+
+        print_form_btn = QPushButton("📄 Print Admission Form")
+        print_form_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        print_form_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E9DEBA;
+                color: #012D54;
+                border: 1px solid #D9B85F;
+                border-radius: 6px;
+                padding: 8px 14px;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background-color: #D9B85F;
+            }
+        """)
+        print_form_btn.clicked.connect(
+            lambda checked=False, sid=student_id, d=dialog:
+                self.open_admission_form_dialog(sid, parent_widget=d)
+        )
+        profile_hdr.addWidget(print_form_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addLayout(profile_hdr)
 
         # Student details
         details = QLabel(
@@ -1280,7 +1351,7 @@ class StudentsMixin:
         student_fees_table.verticalHeader().setVisible(False)
         configure_table_ux(
             student_fees_table,
-            column_widths=[140, 110, 110, 110, 110, 110, 140],
+            column_widths=[140, 110, 110, 110, 110, 110, 205],
             stretch_column=0,
             flexible_columns=[0],
             fixed_columns=[6],
@@ -1646,6 +1717,32 @@ class StudentsMixin:
                 """)
                 hist_b.clicked.connect(lambda ch, fid=fee.id: (self.open_payment_history_dialog(fid), self.load_student_fee_summary(student_id, total_due_label, total_paid_label, outstanding_label, overdue_label, table)))
                 act_l.addWidget(hist_b)
+
+                receipt_b = QPushButton("🖨 Receipt")
+                receipt_b.setFixedSize(70, 26)
+                has_pmt = fee.total_paid > 0 or status_calc == "PAID"
+                receipt_b.setEnabled(has_pmt)
+                receipt_b.setCursor(Qt.CursorShape.PointingHandCursor)
+                receipt_b.setStyleSheet("""
+                    QPushButton {
+                        background-color: #FEFEFE;
+                        color: #012D54;
+                        border: 1px solid #D9B85F;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover:enabled {
+                        background-color: #E9DEBA;
+                    }
+                    QPushButton:disabled {
+                        background-color: #E5E7EB;
+                        color: #9CA3AF;
+                        border-color: #E5E7EB;
+                    }
+                """)
+                receipt_b.clicked.connect(lambda ch, fid=fee.id: self.open_fee_receipt_dialog(fid))
+                act_l.addWidget(receipt_b)
 
                 table.setCellWidget(row, 6, act_w)
 

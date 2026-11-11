@@ -19,8 +19,10 @@ page controller mixins from `app.ui.mixins`:
 """
 
 import os
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -37,6 +39,7 @@ from PyQt6.QtWidgets import (
 
 from app.database.connection import SessionLocal
 from app.services.batch_service import get_active_batches
+from app.services.branding_service import resolve_app_branding
 from app.services.coaching_helper import CoachingHelper
 from app.services.messaging_service import (
     ensure_messaging_seed_data,
@@ -105,8 +108,14 @@ class MainWindow(
         top_bar.setObjectName("topBar")
 
         top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(24, 12, 24, 12)
+        top_layout.setContentsMargins(24, 10, 24, 10)
+        top_layout.setSpacing(12)
         top_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        self.app_logo_label = QLabel()
+        self.app_logo_label.setObjectName("appLogo")
+        self.app_logo_label.setFixedSize(36, 36)
+        self.app_logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         title = QLabel("Coaching Management System")
         title.setObjectName("appTitle")
@@ -117,6 +126,7 @@ class MainWindow(
         settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
         settings_button.clicked.connect(self.open_settings)
 
+        top_layout.addWidget(self.app_logo_label, alignment=Qt.AlignmentFlag.AlignVCenter)
         top_layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignVCenter)
         top_layout.addStretch()
         top_layout.addWidget(settings_button, alignment=Qt.AlignmentFlag.AlignVCenter)
@@ -282,16 +292,54 @@ class MainWindow(
             with SessionLocal() as session:
                 ensure_messaging_seed_data(session)
                 cfg = get_messaging_config(session)
-                coaching_name = cfg.get("coaching_name", "TAMS Coaching Academy").strip() or "TAMS"
-                tagline = cfg.get("coaching_tagline", "").strip()
-                academic_session = cfg.get("academic_session", "").strip()
+                branding = resolve_app_branding(cfg)
 
-            self.setWindowTitle(f"TAMS - {coaching_name}" if coaching_name != "TAMS" else "TAMS - Coaching Management System")
+            app_name = branding["app_name"]
+            coaching_name = branding["coaching_name"]
+            tagline = branding["coaching_tagline"]
+            academic_session = branding["academic_session"]
+            logo_path = Path(branding["logo_path"])
+            icon_path = Path(branding["icon_path"])
+
+            if coaching_name and coaching_name.lower() != app_name.lower():
+                self.setWindowTitle(f"{app_name} - {coaching_name}")
+            else:
+                self.setWindowTitle(f"{app_name} - Coaching Management System")
+
             if hasattr(self, "app_title_label"):
-                title_text = coaching_name
+                if coaching_name == "TAMS Coaching Academy" and app_name != "TAMS":
+                    title_text = app_name
+                elif app_name.lower() in coaching_name.lower():
+                    title_text = coaching_name
+                else:
+                    title_text = f"{app_name} — {coaching_name}"
                 if academic_session:
                     title_text += f" ({academic_session})"
                 self.app_title_label.setText(title_text)
+
+            if hasattr(self, "app_logo_label") and logo_path.exists():
+                pix = QPixmap(str(logo_path))
+                if not pix.isNull():
+                    self.app_logo_label.setPixmap(
+                        pix.scaled(
+                            34,
+                            34,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation,
+                        )
+                    )
+
+            if icon_path.exists():
+                qicon = QIcon(str(icon_path))
+                self.setWindowIcon(qicon)
+                app = QApplication.instance()
+                if app:
+                    app.setWindowIcon(qicon)
+
+            app = QApplication.instance()
+            if app:
+                app.setApplicationName(app_name)
+                app.setApplicationDisplayName(app_name)
 
             if hasattr(self, "dashboard_subtitle_label"):
                 if tagline:

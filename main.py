@@ -78,20 +78,22 @@ def main():
         app_font.setStyleHint(QFont.StyleHint.SansSerif)
         app.setFont(app_font)
 
-    # Configure application branding and window icon
-    from PyQt6.QtGui import QIcon
-    from app.ui.theme import get_app_icon_path
-    icon_path = get_app_icon_path()
-    if icon_path.exists():
-        app.setWindowIcon(QIcon(str(icon_path)))
-
     # Ensure database schema, tables, and seed data exist before UI loads
     from app.database.init_db import init_database
     init_database()
 
-    window = MainWindow()
+    # Configure application branding and window icon from user settings
+    from PyQt6.QtGui import QIcon
+    from app.services.branding_service import resolve_app_branding
+
+    branding = resolve_app_branding()
+    app.setApplicationName(branding["app_name"])
+    app.setApplicationDisplayName(branding["app_name"])
+    icon_path = branding["icon_path"]
     if icon_path.exists():
-        window.setWindowIcon(QIcon(str(icon_path)))
+        app.setWindowIcon(QIcon(str(icon_path)))
+
+    window = MainWindow()
     window.show()
 
     sys.exit(app.exec())

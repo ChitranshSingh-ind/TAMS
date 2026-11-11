@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 from sqlalchemy import select
 
@@ -406,23 +407,34 @@ class RecordPaymentDialog(QDialog):
         layout.addLayout(form)
 
         # Buttons
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
-        )
-        save_btn = btns.button(QDialogButtonBox.StandardButton.Save)
-        if save_btn:
-            save_btn.setText("Save Payment")
-            save_btn.setObjectName("primaryDialogButton")
-            save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel_btn = btns.button(QDialogButtonBox.StandardButton.Cancel)
-        if cancel_btn:
-            cancel_btn.setObjectName("secondaryDialogButton")
-            cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btns.accepted.connect(self.save_payment)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+        btn_row.addStretch()
 
-    def save_payment(self):
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("secondaryDialogButton")
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setFixedHeight(36)
+        cancel_btn.clicked.connect(self.reject)
+
+        save_btn = QPushButton("Save Payment")
+        save_btn.setObjectName("secondaryDialogButton")
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setFixedHeight(36)
+        save_btn.clicked.connect(lambda: self.save_payment(open_receipt=False))
+
+        save_print_btn = QPushButton("🖨 Save & Print Receipt")
+        save_print_btn.setObjectName("primaryDialogButton")
+        save_print_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_print_btn.setFixedHeight(36)
+        save_print_btn.clicked.connect(lambda: self.save_payment(open_receipt=True))
+
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(save_btn)
+        btn_row.addWidget(save_print_btn)
+        layout.addLayout(btn_row)
+
+    def save_payment(self, open_receipt: bool = False):
         amount = self.amount_input.value()
         payment_date = self.date_input.date().toPyDate()
         method = self.method_combo.currentText()
@@ -453,12 +465,18 @@ class RecordPaymentDialog(QDialog):
                     notes=notes,
                 )
                 receipt_used = pmt.receipt_number
+                payment_id = pmt.id
 
-            QMessageBox.information(
-                self,
-                "Payment Recorded",
-                f"Payment of ₹{amount:,.2f} recorded successfully.\nReceipt No: {receipt_used}",
-            )
+            if open_receipt:
+                from app.ui.print_dialogs import FeeReceiptDialog
+                dlg = FeeReceiptDialog(self.fee_id, payment_id=payment_id, parent=self.parent())
+                dlg.exec()
+            else:
+                QMessageBox.information(
+                    self,
+                    "Payment Recorded",
+                    f"Payment of ₹{amount:,.2f} recorded successfully.\nReceipt No: {receipt_used}",
+                )
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Payment Error", str(e))
@@ -469,7 +487,7 @@ class PaymentHistoryDialog(QDialog):
         super().__init__(parent)
         self.fee_id = fee_id
         self.setWindowTitle("Payment History")
-        self.resize(760, 480)
+        self.resize(840, 500)
 
         with SessionLocal() as session:
             fee = get_fee(session, fee_id)
@@ -502,21 +520,37 @@ class PaymentHistoryDialog(QDialog):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         configure_table_ux(
             self.table,
-            column_widths=[120, 150, 120, 110, 200, 110, 120],
+            column_widths=[115, 145, 110, 105, 180, 90, 145],
             flexible_columns=[4],
             fixed_columns=[6],
             strategy=TableSizingStrategy.BOUNDED_AND_FLEXIBLE,
         )
         layout.addWidget(self.table, 1)
 
+        footer = QHBoxLayout()
+        footer.setSpacing(10)
+
+        self.print_all_btn = QPushButton("🖨 Print Statement")
+        self.print_all_btn.setObjectName("secondaryDialogButton")
+        self.print_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.print_all_btn.clicked.connect(lambda: self._open_receipt(payment_id=None))
+        footer.addWidget(self.print_all_btn)
+        footer.addStretch()
+
         close_btn = QPushButton("Close")
         close_btn.setObjectName("primaryDialogButton")
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setFixedWidth(100)
         close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        footer.addWidget(close_btn)
+        layout.addLayout(footer)
 
         self.load_payments()
+
+    def _open_receipt(self, payment_id: int | None = None):
+        from app.ui.print_dialogs import FeeReceiptDialog
+        dlg = FeeReceiptDialog(self.fee_id, payment_id=payment_id, parent=self)
+        dlg.exec()
 
     def load_payments(self):
         with SessionLocal() as session:
@@ -556,9 +590,34 @@ class PaymentHistoryDialog(QDialog):
             self.table.setItem(row, 5, status_item)
 
             if not p.is_reversed:
+                act_w = QWidget()
+                act_l = QHBoxLayout(act_w)
+                act_l.setContentsMargins(4, 2, 4, 2)
+                act_l.setSpacing(6)
+                act_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                print_btn = QPushButton("🖨 Print")
+                print_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                print_btn.setFixedSize(62, 26)
+                print_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E9DEBA;
+                        color: #012D54;
+                        border: 1px solid #D9B85F;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover {
+                        background-color: #D9B85F;
+                    }
+                """)
+                print_btn.clicked.connect(lambda ch, pid=p.id: self._open_receipt(payment_id=pid))
+                act_l.addWidget(print_btn)
+
                 rev_btn = QPushButton("Reverse")
                 rev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                rev_btn.setFixedSize(65, 26)
+                rev_btn.setFixedSize(62, 26)
                 rev_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #FEFEFE;
@@ -573,7 +632,8 @@ class PaymentHistoryDialog(QDialog):
                     }
                 """)
                 rev_btn.clicked.connect(lambda ch, pid=p.id, amt=p.amount: self.confirm_reversal(pid, amt))
-                self.table.setCellWidget(row, 6, rev_btn)
+                act_l.addWidget(rev_btn)
+                self.table.setCellWidget(row, 6, act_w)
             else:
                 lbl = QLabel("—")
                 lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)

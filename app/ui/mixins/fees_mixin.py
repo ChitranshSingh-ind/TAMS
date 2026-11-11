@@ -274,7 +274,7 @@ class FeesMixin:
         self.fees_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         configure_table_ux(
             self.fees_table,
-            column_widths=[130, 180, 140, 120, 110, 110, 110, 110, 110, 180],
+            column_widths=[130, 180, 140, 120, 110, 110, 110, 110, 110, 255],
             stretch_column=1,
             flexible_columns=[1, 2],
             fixed_columns=[9],
@@ -474,6 +474,37 @@ class FeesMixin:
             edit_btn.clicked.connect(lambda ch, fid=fee.id: self.open_edit_fee_dialog(fid))
             action_layout.addWidget(edit_btn)
 
+            receipt_btn = QPushButton("🖨 Receipt")
+            receipt_btn.setFixedSize(72, 28)
+            receipt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            has_payment = fee.total_paid > 0 or status_calc == "PAID"
+            receipt_btn.setEnabled(has_payment)
+            receipt_btn.setToolTip(
+                "Print or save PDF fee receipt"
+                if has_payment
+                else "Record a payment first to generate a printable receipt"
+            )
+            receipt_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #FEFEFE;
+                    color: #012D54;
+                    border: 1px solid #D9B85F;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover:enabled {
+                    background-color: #E9DEBA;
+                }
+                QPushButton:disabled {
+                    background-color: #E5E7EB;
+                    color: #9CA3AF;
+                    border-color: #E5E7EB;
+                }
+            """)
+            receipt_btn.clicked.connect(lambda ch, fid=fee.id: self.open_fee_receipt_dialog(fid))
+            action_layout.addWidget(receipt_btn)
+
             self.fees_table.setCellWidget(row, 9, action_widget)
 
         self.fees_empty_label.setVisible(len(fees) == 0)
@@ -598,6 +629,11 @@ class FeesMixin:
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_fees()
             self.refresh_dashboard()
+
+    def open_fee_receipt_dialog(self, fee_id: int, payment_id: int | None = None):
+        from app.ui.print_dialogs import FeeReceiptDialog
+        dialog = FeeReceiptDialog(fee_id, payment_id=payment_id, parent=self)
+        dialog.exec()
 
     # ═════════════════════════════════════════════════════════════════════════
     # ── EXPENSES MODULE ──────────────────────────────────────────────────────

@@ -78,7 +78,7 @@ def run_tray():
         run_headless()
         return
 
-    from app.ui.theme import get_app_icon_path
+    from app.services.branding_service import resolve_app_branding
 
     app = QApplication.instance()
     if not app:
@@ -86,7 +86,9 @@ def run_tray():
 
     app.setQuitOnLastWindowClosed(False)
 
-    app_icon_file = get_app_icon_path()
+    branding = resolve_app_branding()
+    app_name = branding["app_name"]
+    app_icon_file = branding["icon_path"]
     if app_icon_file.exists():
         app.setWindowIcon(QIcon(str(app_icon_file)))
 
@@ -99,7 +101,7 @@ def run_tray():
     if not engine.start():
         QMessageBox.information(
             None,
-            "TAMS CoachingHelper",
+            f"{app_name} CoachingHelper",
             "CoachingHelper is already running in the background.",
         )
         sys.exit(0)
@@ -160,17 +162,17 @@ def run_tray():
         painter.setPen(QColor("#D9B85F"))
         painter.drawEllipse(2, 2, 28, 28)
         painter.setPen(QColor("#FEFEFE"))
-        painter.drawText(pix.rect(), 0x0084, "T")  # AlignCenter
+        painter.drawText(pix.rect(), 0x0084, app_name[:1].upper() or "T")  # AlignCenter
         painter.end()
         return QIcon(pix)
 
     tray_icon.setIcon(make_icon("#012D54"))
-    tray_icon.setToolTip(f"TAMS CoachingHelper v{APP_VERSION} — Running")
+    tray_icon.setToolTip(f"{app_name} CoachingHelper v{APP_VERSION} — Running")
 
     # Tray Menu
     menu = QMenu()
 
-    title_action = QAction(f"TAMS CoachingHelper v{APP_VERSION}", menu)
+    title_action = QAction(f"{app_name} CoachingHelper v{APP_VERSION}", menu)
     title_action.setEnabled(False)
     menu.addAction(title_action)
 

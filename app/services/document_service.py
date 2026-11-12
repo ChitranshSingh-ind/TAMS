@@ -8,8 +8,10 @@ Generates Qt-compatible HTML documents for:
 
 from __future__ import annotations
 
+import base64
 import html
 import json
+import textwrap
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -24,6 +26,34 @@ from app.services.messaging_service import (
     get_messaging_config,
     update_messaging_config,
 )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A4 Page Geometry & Physical Unit Constants (ISO 216 A4: 210 mm × 297 mm)
+# ─────────────────────────────────────────────────────────────────────────────
+A4_PAGE_WIDTH_MM = 210.0
+A4_PAGE_HEIGHT_MM = 297.0
+A4_MARGIN_MM = 12.0
+A4_PRINTABLE_WIDTH_MM = A4_PAGE_WIDTH_MM - (2.0 * A4_MARGIN_MM)    # 186.0 mm
+A4_PRINTABLE_HEIGHT_MM = A4_PAGE_HEIGHT_MM - (2.0 * A4_MARGIN_MM)  # 273.0 mm
+PT_PER_MM = 72.0 / 25.4
+PX_PER_MM = 96.0 / 25.4  # Qt QTextDocument HTML layout uses 96 DPI logical coordinates
+A4_PRINTABLE_WIDTH_PT = round(A4_PRINTABLE_WIDTH_MM * PT_PER_MM, 2)    # 527.24 pt
+A4_PRINTABLE_HEIGHT_PT = round(A4_PRINTABLE_HEIGHT_MM * PT_PER_MM, 2)  # 773.86 pt
+
+# Standard Passport Size Photo (ICAO / Indian standard: 35 mm × 45 mm)
+PASSPORT_PHOTO_WIDTH_MM = 35.0
+PASSPORT_PHOTO_HEIGHT_MM = 45.0
+
+
+def mm_to_layout_px(mm: float) -> int:
+    """Converts physical millimeters to 96-DPI Qt widget screen pixel coordinates."""
+    return max(1, round(mm * PX_PER_MM))
+
+
+def mm_to_print_pt(mm: float) -> int:
+    """Converts physical millimeters to 72-DPI point attributes for QTextDocument HTML layout."""
+    return max(1, round(mm * PT_PER_MM))
+
 
 MONTH_NAMES: tuple[str, ...] = (
     "January", "February", "March", "April", "May", "June",
@@ -154,6 +184,7 @@ def _render_letterhead_html(
     document_badge: str,
     logo_data_uri: str | None = None,
     show_logo: bool = True,
+    compact: bool = False,
 ) -> str:
     coaching_name = html.escape(branding.get("coaching_name") or branding.get("app_name") or "TAMS")
     app_name = html.escape(branding.get("app_name") or "TAMS")
@@ -163,6 +194,14 @@ def _render_letterhead_html(
     address = html.escape(branding.get("coaching_address") or "")
     session_str = html.escape(branding.get("academic_session") or "")
 
+    title_pt = 13.5 if compact else 16.0
+    sub_pt = 8.0 if compact else 9.0
+    badge_pt = 9.0 if compact else 10.0
+    logo_mm = 13.0 if compact else 16.0
+    logo_pt = mm_to_print_pt(logo_mm)
+    logo_col_pt = mm_to_print_pt(logo_mm + 3.0)
+    badge_col_pt = mm_to_print_pt(44.0)
+
     contact_bits: list[str] = []
     if phone:
         contact_bits.append(f"Phone: {phone}")
@@ -170,61 +209,71 @@ def _render_letterhead_html(
         contact_bits.append(f"Email: {email}")
     contact_line = " &nbsp;|&nbsp; ".join(contact_bits)
 
+    pad_bottom = "5pt" if compact else "7pt"
+    margin_bottom = "6pt" if compact else "9pt"
+
     logo_cell = ""
     if show_logo and logo_data_uri:
         logo_cell = (
-            f'<td width="68" valign="middle" align="center" style="padding-right: 12px;">'
-            f'<img src="{logo_data_uri}" width="56" height="56" />'
+            f'<td width="{logo_col_pt}" valign="middle" align="center" '
+            f'style="padding-right: 8pt; padding-bottom: {pad_bottom}; border-bottom: 2px solid #012D54;">'
+            f'<img src="{logo_data_uri}" width="{logo_pt}" height="{logo_pt}" />'
             f"</td>"
         )
 
     tagline_html = (
-        f'<div style="font-size: 11px; color: #615F4B; font-style: italic; margin-top: 2px;">{tagline}</div>'
+        f'<div style="font-size: {sub_pt}pt; color: #615F4B; font-style: italic; margin-top: 1.5pt;">{tagline}</div>'
         if tagline
         else ""
     )
     address_html = (
-        f'<div style="font-size: 11px; color: #374151; margin-top: 2px;">{address}</div>'
+        f'<div style="font-size: {sub_pt}pt; color: #374151; margin-top: 1.5pt;">{address}</div>'
         if address
         else ""
     )
     contact_html = (
-        f'<div style="font-size: 11px; color: #374151; margin-top: 2px;">{contact_line}</div>'
+        f'<div style="font-size: {sub_pt}pt; color: #374151; margin-top: 1.5pt;">{contact_line}</div>'
         if contact_line
         else ""
     )
     session_badge = (
-        f'<div style="font-size: 10px; color: #615F4B; margin-top: 4px;">Session: <b>{session_str}</b></div>'
+        f'<div style="font-size: {sub_pt}pt; color: #615F4B; margin-top: 3pt;">Session: <b>{session_str}</b></div>'
         if session_str
         else ""
     )
     app_tag = (
-        f'<span style="font-size: 10px; color: #615F4B; font-weight: 600;">[{app_name}]</span> '
+        f'<div style="font-size: 7.5pt; color: #615F4B; font-weight: 600; margin-top: 1.5pt;">[{app_name}]</div>'
         if app_name.lower() not in coaching_name.lower()
         else ""
     )
 
     return f"""
     <table width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="border-bottom: 2px solid #012D54; padding-bottom: 10px; margin-bottom: 12px;">
+           style="margin-bottom: {margin_bottom};">
         <tr>
             {logo_cell}
-            <td valign="middle" align="left">
-                <div style="font-size: 19px; font-weight: 700; color: #012D54; letter-spacing: 0.3px;">
+            <td valign="middle" align="left"
+                style="padding-bottom: {pad_bottom}; border-bottom: 2px solid #012D54;">
+                <div style="font-size: {title_pt}pt; font-weight: 700; color: #012D54;">
                     {coaching_name}
                 </div>
                 {tagline_html}
                 {address_html}
                 {contact_html}
             </td>
-            <td width="160" valign="middle" align="right">
-                <div style="background-color: #012D54; color: #FEFEFE; padding: 6px 12px;
-                            font-size: 11px; font-weight: 700; text-align: center;
-                            letter-spacing: 0.6px; border-bottom: 2px solid #D9B85F;">
-                    {html.escape(document_badge)}
-                </div>
+            <td width="{badge_col_pt}" valign="middle" align="right"
+                style="padding-bottom: {pad_bottom}; border-bottom: 2px solid #012D54;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <td align="center" style="background-color: #012D54; color: #FEFEFE;
+                                                  padding: 4pt 8pt; font-size: {badge_pt}pt;
+                                                  font-weight: 700; border-bottom: 2px solid #D9B85F;">
+                            {html.escape(document_badge)}
+                        </td>
+                    </tr>
+                </table>
                 {session_badge}
-                <div style="font-size: 9px; color: #615F4B; margin-top: 2px;">{app_tag}</div>
+                {app_tag}
             </td>
         </tr>
     </table>
@@ -370,6 +419,7 @@ def _render_single_receipt_block(
     *,
     copy_label: str,
     logo_data_uri: str | None = None,
+    compact: bool = False,
 ) -> str:
     curr = html.escape(branding.get("currency_symbol") or "₹")
     letterhead = _render_letterhead_html(
@@ -377,7 +427,17 @@ def _render_single_receipt_block(
         document_badge="FEE RECEIPT",
         logo_data_uri=logo_data_uri,
         show_logo=True,
+        compact=compact,
     )
+
+    body_pt = 9.0 if compact else 10.0
+    small_pt = 8.0 if compact else 9.0
+    highlight_pt = 10.0 if compact else 11.0
+    meta_pad = "3.5pt 7pt" if compact else "5pt 8pt"
+    cell_pad = "4pt 7pt" if compact else "5.5pt 9pt"
+    outer_cellpad = 10 if compact else 14
+    sig_gap_pt = 14 if compact else 22
+    amt_col_pt = mm_to_print_pt(38.0)
 
     receipt_no = html.escape(str(receipt_data["receipt_number"]))
     receipt_date = html.escape(str(receipt_data["receipt_date"]))
@@ -405,8 +465,8 @@ def _render_single_receipt_block(
     if discount > 0:
         discount_row = f"""
         <tr>
-            <td style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2;">Less: Discount / Waiver</td>
-            <td align="right" style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2; color: #15803D;">- {curr}{discount:,.2f}</td>
+            <td style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2;">Less: Discount / Waiver</td>
+            <td align="right" style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2; color: #15803D;">- {curr}{discount:,.2f}</td>
         </tr>
         """
 
@@ -417,143 +477,179 @@ def _render_single_receipt_block(
         for p in payments:
             rows_str += f"""
             <tr>
-                <td style="padding: 4px 8px; border-bottom: 1px solid #EFE9D2;">{html.escape(p['receipt_number'])}</td>
-                <td style="padding: 4px 8px; border-bottom: 1px solid #EFE9D2;">{html.escape(p['payment_date'])}</td>
-                <td style="padding: 4px 8px; border-bottom: 1px solid #EFE9D2;">{html.escape(p['payment_method'])}</td>
-                <td align="right" style="padding: 4px 8px; border-bottom: 1px solid #EFE9D2;">{curr}{p['amount']:,.2f}</td>
+                <td style="padding: 2.5pt 6pt; border-bottom: 1px solid #EFE9D2;">{html.escape(p['receipt_number'])}</td>
+                <td style="padding: 2.5pt 6pt; border-bottom: 1px solid #EFE9D2;">{html.escape(p['payment_date'])}</td>
+                <td style="padding: 2.5pt 6pt; border-bottom: 1px solid #EFE9D2;">{html.escape(p['payment_method'])}</td>
+                <td align="right" style="padding: 2.5pt 6pt; border-bottom: 1px solid #EFE9D2;">{curr}{p['amount']:,.2f}</td>
             </tr>
             """
         installments_html = f"""
-        <div style="margin-top: 10px; font-size: 11px; font-weight: 700; color: #012D54;">
+        <div style="margin-top: 6pt; font-size: {small_pt}pt; font-weight: 700; color: #012D54;">
             Payment Transactions Included:
         </div>
         <table width="100%" cellpadding="0" cellspacing="0" border="0"
-               style="margin-top: 4px; border: 1px solid #E9DEBA; font-size: 11px;">
+               style="margin-top: 2.5pt; border: 1px solid #E9DEBA; border-collapse: collapse; font-size: {small_pt}pt;">
             <tr style="background-color: #F8F6EA; color: #012D54; font-weight: 700;">
-                <td style="padding: 5px 8px; border-bottom: 1px solid #E9DEBA;">Receipt No.</td>
-                <td style="padding: 5px 8px; border-bottom: 1px solid #E9DEBA;">Date</td>
-                <td style="padding: 5px 8px; border-bottom: 1px solid #E9DEBA;">Mode</td>
-                <td align="right" style="padding: 5px 8px; border-bottom: 1px solid #E9DEBA;">Amount</td>
+                <td style="padding: 3.5pt 6pt; border-bottom: 1px solid #E9DEBA;">Receipt No.</td>
+                <td style="padding: 3.5pt 6pt; border-bottom: 1px solid #E9DEBA;">Date</td>
+                <td style="padding: 3.5pt 6pt; border-bottom: 1px solid #E9DEBA;">Mode</td>
+                <td align="right" style="padding: 3.5pt 6pt; border-bottom: 1px solid #E9DEBA;">Amount</td>
             </tr>
             {rows_str}
         </table>
         """
 
     notes_html = (
-        f'<div style="font-size: 11px; color: #374151; margin-top: 6px;"><b>Remarks:</b> {notes}</div>'
+        f'<div style="font-size: {small_pt}pt; color: #374151; margin-top: 5pt;"><b>Remarks:</b> {notes}</div>'
         if notes
         else ""
     )
 
     copy_badge = (
-        f'<div align="right" style="font-size: 10px; font-weight: 700; color: #615F4B; '
-        f'letter-spacing: 0.8px; margin-bottom: 4px;">{html.escape(copy_label)}</div>'
+        f'<div align="right" style="font-size: 8pt; font-weight: 700; color: #615F4B; '
+        f'margin-bottom: 3pt;">{html.escape(copy_label)}</div>'
         if copy_label
         else ""
     )
 
     printed_on = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    out_color = "#B91C1C" if outstanding > 0 else "#15803D"
 
     return f"""
-    <div style="border: 1.5px solid #012D54; padding: 14px 16px; background-color: #FFFFFF;">
-        {copy_badge}
-        {letterhead}
+    <table width="100%" cellpadding="{outer_cellpad}" cellspacing="0" border="0"
+           style="border: 1px solid #012D54; background-color: #FFFFFF; border-collapse: collapse;">
+        <tr>
+            <td>
+                {copy_badge}
+                {letterhead}
 
-        <table width="100%" cellpadding="4" cellspacing="0" border="0"
-               style="background-color: #F8F6EA; border: 1px solid #E9DEBA; font-size: 12px; margin-bottom: 10px;">
-            <tr>
-                <td width="50%"><b>Receipt No.:</b> {receipt_no}</td>
-                <td width="50%" align="right"><b>Receipt Date:</b> {receipt_date}</td>
-            </tr>
-            <tr>
-                <td><b>Student Name:</b> {student_name}</td>
-                <td align="right"><b>Admission No.:</b> {adm_no}</td>
-            </tr>
-            <tr>
-                <td><b>Batch:</b> {batch_name}</td>
-                <td align="right"><b>Fee Period:</b> {fee_period}</td>
-            </tr>
-            <tr>
-                <td><b>Parent / Guardian:</b> {parent_name}</td>
-                <td align="right"><b>Contact:</b> {parent_phone}</td>
-            </tr>
-            <tr>
-                <td><b>Payment Mode:</b> {payment_method} ({installment_label})</td>
-                <td align="right"><b>Fee Status:</b> {status}</td>
-            </tr>
-        </table>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="background-color: #F8F6EA; border: 1px solid #E9DEBA;
+                              border-collapse: collapse; font-size: {body_pt}pt; margin-bottom: 8pt;">
+                    <tr>
+                        <td width="50%" style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Receipt No.:</b> {receipt_no}
+                        </td>
+                        <td width="50%" align="right" style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Receipt Date:</b> {receipt_date}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Student Name:</b> {student_name}
+                        </td>
+                        <td align="right" style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Admission No.:</b> {adm_no}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Batch:</b> {batch_name}
+                        </td>
+                        <td align="right" style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Fee Period:</b> {fee_period}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Parent / Guardian:</b> {parent_name}
+                        </td>
+                        <td align="right" style="padding: {meta_pad}; border-bottom: 1px solid #EFE9D2; background-color: #F8F6EA;">
+                            <b>Contact:</b> {parent_phone}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: {meta_pad}; background-color: #F8F6EA;">
+                            <b>Payment Mode:</b> {payment_method} ({installment_label})
+                        </td>
+                        <td align="right" style="padding: {meta_pad}; background-color: #F8F6EA;">
+                            <b>Fee Status:</b> {status}
+                        </td>
+                    </tr>
+                </table>
 
-        <table width="100%" cellpadding="0" cellspacing="0" border="0"
-               style="border: 1px solid #D9B85F; font-size: 12px;">
-            <tr style="background-color: #012D54; color: #FEFEFE; font-weight: 700;">
-                <td style="padding: 7px 10px;">Fee Particulars</td>
-                <td width="160" align="right" style="padding: 7px 10px;">Amount</td>
-            </tr>
-            <tr>
-                <td style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2;">
-                    Tuition Fee — {fee_period}
-                </td>
-                <td align="right" style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2;">
-                    {curr}{base_amt:,.2f}
-                </td>
-            </tr>
-            {discount_row}
-            <tr>
-                <td style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2;">Net Fee Payable</td>
-                <td align="right" style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2;">
-                    {curr}{final_due:,.2f}
-                </td>
-            </tr>
-            <tr style="background-color: #F8F6EA; font-weight: 700; color: #012D54; font-size: 13px;">
-                <td style="padding: 8px 10px; border-bottom: 1px solid #D9B85F;">
-                    Amount Paid (This Receipt)
-                </td>
-                <td align="right" style="padding: 8px 10px; border-bottom: 1px solid #D9B85F;">
-                    {curr}{receipt_amt:,.2f}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2;">
-                    Total Paid to Date (All Installments)
-                </td>
-                <td align="right" style="padding: 6px 10px; border-bottom: 1px solid #EFE9D2;">
-                    {curr}{total_paid:,.2f}
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 6px 10px; font-weight: 700; color: {'#B91C1C' if outstanding > 0 else '#15803D'};">
-                    Outstanding Balance
-                </td>
-                <td align="right" style="padding: 6px 10px; font-weight: 700; color: {'#B91C1C' if outstanding > 0 else '#15803D'};">
-                    {curr}{outstanding:,.2f}
-                </td>
-            </tr>
-        </table>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="border: 1px solid #D9B85F; border-collapse: collapse; font-size: {body_pt}pt;">
+                    <tr style="background-color: #012D54; color: #FEFEFE; font-weight: 700;">
+                        <td style="padding: {cell_pad};">Fee Particulars</td>
+                        <td width="{amt_col_pt}" align="right" style="padding: {cell_pad};">Amount</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2;">
+                            Tuition Fee — {fee_period}
+                        </td>
+                        <td align="right" style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2;">
+                            {curr}{base_amt:,.2f}
+                        </td>
+                    </tr>
+                    {discount_row}
+                    <tr>
+                        <td style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2;">Net Fee Payable</td>
+                        <td align="right" style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2;">
+                            {curr}{final_due:,.2f}
+                        </td>
+                    </tr>
+                    <tr style="background-color: #F8F6EA; font-weight: 700; color: #012D54; font-size: {highlight_pt}pt;">
+                        <td style="padding: {cell_pad}; border-bottom: 1px solid #D9B85F;">
+                            Amount Paid (This Receipt)
+                        </td>
+                        <td align="right" style="padding: {cell_pad}; border-bottom: 1px solid #D9B85F;">
+                            {curr}{receipt_amt:,.2f}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2;">
+                            Total Paid to Date (All Installments)
+                        </td>
+                        <td align="right" style="padding: {cell_pad}; border-bottom: 1px solid #EFE9D2;">
+                            {curr}{total_paid:,.2f}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: {cell_pad}; font-weight: 700; color: {out_color};">
+                            Outstanding Balance
+                        </td>
+                        <td align="right" style="padding: {cell_pad}; font-weight: 700; color: {out_color};">
+                            {curr}{outstanding:,.2f}
+                        </td>
+                    </tr>
+                </table>
 
-        {installments_html}
+                {installments_html}
 
-        <div style="margin-top: 8px; padding: 6px 10px; background-color: #F8F6EA;
-                    border: 1px solid #E9DEBA; font-size: 11px;">
-            <b>Amount Paid in Words:</b> {words}
-        </div>
-        {notes_html}
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="margin-top: 6pt; background-color: #F8F6EA; border: 1px solid #E9DEBA;
+                              border-collapse: collapse; font-size: {small_pt}pt;">
+                    <tr>
+                        <td style="padding: 4.5pt 8pt; background-color: #F8F6EA;">
+                            <b>Amount Paid in Words:</b> {words}
+                        </td>
+                    </tr>
+                </table>
+                {notes_html}
 
-        <table width="100%" cellpadding="0" cellspacing="0" border="0"
-               style="margin-top: 22px; font-size: 11px; color: #374151;">
-            <tr>
-                <td width="60%" valign="bottom" style="color: #615F4B; font-size: 10px;">
-                    Printed on {printed_on}<br/>
-                    Computer-generated fee receipt.
-                </td>
-                <td width="40%" align="right" valign="bottom">
-                    <div style="border-top: 1px solid #012D54; width: 170px; padding-top: 4px;
-                                text-align: center; font-weight: 700; color: #012D54;">
-                        Authorized Signatory
-                    </div>
-                </td>
-            </tr>
-        </table>
-    </div>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="font-size: {small_pt}pt; color: #374151;">
+                    <tr>
+                        <td width="60%" valign="bottom" style="color: #615F4B; font-size: 8pt; padding-top: {sig_gap_pt}pt;">
+                            Printed on {printed_on}<br/>
+                            Computer-generated official fee receipt.
+                        </td>
+                        <td width="40%" align="right" valign="bottom" style="padding-top: {sig_gap_pt}pt;">
+                            <table width="75%" cellpadding="0" cellspacing="0" border="0" align="right">
+                                <tr>
+                                    <td align="center" style="border-top: 1px solid #012D54; padding-top: 3pt;
+                                                              font-weight: 700; font-size: {small_pt}pt; color: #012D54;">
+                                        Authorized Signatory
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
     """
 
 
@@ -564,26 +660,30 @@ def render_fee_receipt_html(
     dual_copy: bool = False,
     logo_data_uri: str | None = None,
 ) -> str:
-    """Renders complete printable HTML document for a fee payment receipt."""
+    """Renders complete A4-proportioned printable HTML document for a fee payment receipt."""
     if dual_copy:
         student_copy = _render_single_receipt_block(
             receipt_data,
             branding,
             copy_label="STUDENT / PARENT COPY",
             logo_data_uri=logo_data_uri,
+            compact=True,
         )
         office_copy = _render_single_receipt_block(
             receipt_data,
             branding,
             copy_label="OFFICE COPY",
             logo_data_uri=logo_data_uri,
+            compact=True,
         )
         body = f"""
         {student_copy}
-        <div style="text-align: center; color: #615F4B; font-size: 10px;
-                    margin: 12px 0; border-top: 1px dashed #9CA3AF; padding-top: 4px;">
-            &#9986; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 10pt 0;">
+            <tr>
+                <td width="14" valign="middle" style="color: #615F4B; font-size: 9pt;">&#9986;</td>
+                <td valign="middle" style="border-bottom: 1px dashed #9CA3AF; font-size: 3pt;">&nbsp;</td>
+            </tr>
+        </table>
         {office_copy}
         """
     else:
@@ -592,12 +692,13 @@ def render_fee_receipt_html(
             branding,
             copy_label="",
             logo_data_uri=logo_data_uri,
+            compact=False,
         )
 
     return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8" /></head>
-<body style="font-family: Arial, Helvetica, sans-serif; color: #1F2937; margin: 0; padding: 4px;">
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #1F2937; margin: 0; padding: 0;">
 {body}
 </body>
 </html>"""
@@ -716,36 +817,88 @@ def build_admission_form_student_data(
     return data
 
 
-def _format_form_value(val: str) -> str:
+def _format_form_value(val: str, *, blank_chars: int = 26) -> str:
     clean = (val or "").strip()
     if clean:
         return html.escape(clean)
-    return '<span style="color: #9CA3AF;">________________________________________</span>'
+    return f'<span style="color: #9CA3AF;">{"_" * blank_chars}</span>'
 
 
 def _render_fields_table(
     fields: list[tuple[str, str]],
-    values: dict[str, str],
+    *,
+    label_width_pct: int = 34,
+    blank_chars: int = 26,
 ) -> str:
     if not fields:
         return ""
+    val_width_pct = 100 - label_width_pct
     rows = ""
     for label, val in fields:
         rows += f"""
         <tr>
-            <td width="34%" style="padding: 7px 10px; background-color: #F8F6EA;
+            <td width="{label_width_pct}%" style="padding: 4pt 7pt; background-color: #F8F6EA;
                                    border: 1px solid #E9DEBA; font-weight: 700; color: #012D54;">
                 {html.escape(label)}
             </td>
-            <td width="66%" style="padding: 7px 10px; border: 1px solid #E9DEBA; color: #1F2937;">
-                {_format_form_value(val)}
+            <td width="{val_width_pct}%" style="padding: 4pt 7pt; border: 1px solid #E9DEBA; color: #1F2937;">
+                {_format_form_value(val, blank_chars=blank_chars)}
             </td>
         </tr>
         """
     return (
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
-        'style="border-collapse: collapse; font-size: 12px; margin-bottom: 10px;">'
+        'style="border-collapse: collapse; border: 1px solid #E9DEBA; font-size: 9.5pt; margin-bottom: 6pt;">'
         f"{rows}</table>"
+    )
+
+
+def _render_passport_photo_svg_uri(photo_label: str) -> str:
+    """
+    Generates an inline SVG data URI sized strictly to standard passport photo
+    dimensions (35 mm × 45 mm) with clean border, inner frame, and caption.
+    """
+    clean_label = (photo_label or "Affix Recent Passport Size Photo").strip()
+    wrapped = textwrap.wrap(clean_label, width=16)[:3] or ["Passport Size", "Photo"]
+
+    start_y = 19.0 - (len(wrapped) - 1) * 2.1
+    label_tspans = ""
+    for idx, line in enumerate(wrapped):
+        y_pos = start_y + idx * 4.2
+        label_tspans += (
+            f'<text x="17.5" y="{y_pos:.1f}" font-family="Arial, Helvetica, sans-serif" '
+            f'font-size="2.8" font-weight="bold" fill="#012D54" text-anchor="middle">'
+            f"{html.escape(line)}</text>"
+        )
+
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{mm_to_print_pt(PASSPORT_PHOTO_WIDTH_MM)}" '
+        f'height="{mm_to_print_pt(PASSPORT_PHOTO_HEIGHT_MM)}" '
+        f'viewBox="0 0 {PASSPORT_PHOTO_WIDTH_MM:g} {PASSPORT_PHOTO_HEIGHT_MM:g}">'
+        '<rect x="0.35" y="0.35" width="34.3" height="44.3" '
+        'fill="#F8F6EA" stroke="#012D54" stroke-width="0.5" stroke-dasharray="1.8,1.2"/>'
+        '<rect x="1.8" y="1.8" width="31.4" height="41.4" '
+        'fill="none" stroke="#D9B85F" stroke-width="0.25"/>'
+        f"{label_tspans}"
+        '<text x="17.5" y="34.5" font-family="Arial, Helvetica, sans-serif" '
+        'font-size="2.4" fill="#615F4B" text-anchor="middle">35 mm × 45 mm</text>'
+        '<text x="17.5" y="38.2" font-family="Arial, Helvetica, sans-serif" '
+        'font-size="2.1" fill="#615F4B" text-anchor="middle">(Passport Standard)</text>'
+        "</svg>"
+    )
+    encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    return f"data:image/svg+xml;base64,{encoded}"
+
+
+def _render_section_heading(title_text: str) -> str:
+    return (
+        '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        'style="margin-top: 6pt; margin-bottom: 4pt;">'
+        '<tr><td style="padding-bottom: 2pt; border-bottom: 1px solid #D9B85F; '
+        'font-size: 10pt; font-weight: 700; color: #012D54;">'
+        f"{title_text}"
+        "</td></tr></table>"
     )
 
 
@@ -757,7 +910,7 @@ def render_admission_form_html(
     logo_data_uri: str | None = None,
 ) -> str:
     """
-    Renders a printable, user-customizable admission form HTML document.
+    Renders a printable, user-customizable admission form HTML document sized for ISO A4.
     Supports either structured builder customization or a user-saved custom HTML template.
     """
     if form_cfg.get("use_custom_html") and (form_cfg.get("custom_html_template") or "").strip():
@@ -781,7 +934,7 @@ def render_admission_form_html(
     form_subtitle = html.escape(form_cfg.get("form_subtitle") or "")
     show_logo = bool(form_cfg.get("show_logo", True))
     show_photo = bool(form_cfg.get("show_photo_box", True))
-    photo_label = html.escape(form_cfg.get("photo_box_label") or "Affix Passport Size Photo")
+    photo_label = form_cfg.get("photo_box_label") or "Affix Recent Passport Size Photo"
     show_office_use = bool(form_cfg.get("show_office_use_section", True))
 
     included = set(form_cfg.get("included_fields") or [])
@@ -806,78 +959,80 @@ def render_admission_form_html(
         document_badge="ADMISSION FORM",
         logo_data_uri=logo_data_uri,
         show_logo=show_logo,
+        compact=False,
     )
 
     subtitle_html = (
-        f'<div style="font-size: 11px; color: #615F4B; margin-top: 2px;">{form_subtitle}</div>'
+        f'<div style="font-size: 8.5pt; color: #615F4B; margin-top: 1.5pt;">{form_subtitle}</div>'
         if form_subtitle
         else ""
     )
 
-    # Top Title + Optional Photo Box row
+    # Standard 35 mm × 45 mm Passport Photo cell
     photo_cell = ""
     if show_photo:
-        photo_cell = f"""
-        <td width="135" valign="top" align="center" style="padding-left: 12px;">
-            <table width="120" cellpadding="0" cellspacing="0" border="0"
-                   style="border: 1.5px dashed #012D54; background-color: #F8F6EA;">
-                <tr>
-                    <td height="130" align="center" valign="middle"
-                        style="padding: 8px; font-size: 10px; color: #615F4B;">
-                        {photo_label}
-                    </td>
-                </tr>
-            </table>
-        </td>
-        """
+        photo_svg_uri = _render_passport_photo_svg_uri(photo_label)
+        photo_w_pt = mm_to_print_pt(PASSPORT_PHOTO_WIDTH_MM)
+        photo_h_pt = mm_to_print_pt(PASSPORT_PHOTO_HEIGHT_MM)
+        photo_col_pt = mm_to_print_pt(PASSPORT_PHOTO_WIDTH_MM + 4.0)
+        photo_cell = (
+            f'<td width="{photo_col_pt}" valign="top" align="right" style="padding-left: 8pt;">'
+            f'<img src="{photo_svg_uri}" width="{photo_w_pt}" height="{photo_h_pt}" />'
+            f"</td>"
+        )
 
-    # Split first 3 student rows beside photo box when photo box is shown so layout stays compact
-    top_student_fields = student_fields[:3] if (show_photo and len(student_fields) > 3) else student_fields
-    rest_student_fields = student_fields[3:] if (show_photo and len(student_fields) > 3) else []
+    # Align top 5 student rows cleanly beside the 45 mm tall passport photo box
+    rows_beside_photo = 5
+    top_student_fields = (
+        student_fields[:rows_beside_photo]
+        if (show_photo and len(student_fields) > rows_beside_photo)
+        else student_fields
+    )
+    rest_student_fields = (
+        student_fields[rows_beside_photo:]
+        if (show_photo and len(student_fields) > rows_beside_photo)
+        else []
+    )
 
     top_section = f"""
-    <div style="text-align: center; background-color: #F8F6EA; border: 1px solid #D9B85F;
-                padding: 8px 12px; margin-bottom: 12px;">
-        <div style="font-size: 15px; font-weight: 700; color: #012D54; letter-spacing: 0.5px;">
-            {form_title}
-        </div>
-        {subtitle_html}
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="background-color: #F8F6EA; border: 1px solid #D9B85F;
+                  border-collapse: collapse; margin-bottom: 8pt;">
+        <tr>
+            <td align="center" style="padding: 5.5pt 10pt; background-color: #F8F6EA;">
+                <div style="font-size: 12.5pt; font-weight: 700; color: #012D54;">
+                    {form_title}
+                </div>
+                {subtitle_html}
+            </td>
+        </tr>
+    </table>
 
-    <div style="font-size: 12px; font-weight: 700; color: #012D54;
-                border-bottom: 1px solid #D9B85F; padding-bottom: 3px; margin-bottom: 6px;">
-        1. Student &amp; Academic Details
-    </div>
+    {_render_section_heading("1. Student &amp; Academic Details")}
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
             <td valign="top">
-                {_render_fields_table(top_student_fields, student_data)}
+                {_render_fields_table(top_student_fields, label_width_pct=40 if show_photo else 34, blank_chars=18 if show_photo else 28)}
             </td>
             {photo_cell}
         </tr>
     </table>
-    {_render_fields_table(rest_student_fields, student_data)}
+    {_render_fields_table(rest_student_fields, label_width_pct=34, blank_chars=28)}
     """
 
     parent_section = ""
     if parent_fields:
         parent_section = f"""
-        <div style="font-size: 12px; font-weight: 700; color: #012D54;
-                    border-bottom: 1px solid #D9B85F; padding-bottom: 3px; margin: 8px 0 6px 0;">
-            2. Parent / Guardian Contact Details
-        </div>
-        {_render_fields_table(parent_fields, student_data)}
+        {_render_section_heading("2. Parent / Guardian Contact Details")}
+        {_render_fields_table(parent_fields, label_width_pct=34, blank_chars=28)}
         """
 
     custom_section = ""
     if custom_fields:
         sec_num = 3 if parent_fields else 2
         custom_section = f"""
-        <div style="font-size: 12px; font-weight: 700; color: #012D54;
-                    border-bottom: 1px solid #D9B85F; padding-bottom: 3px; margin: 8px 0 6px 0;">
-            {sec_num}. Additional Details
-        </div>
-        {_render_fields_table(custom_fields, student_data)}
+        {_render_section_heading(f"{sec_num}. Additional Details")}
+        {_render_fields_table(custom_fields, label_width_pct=34, blank_chars=28)}
         """
 
     terms_raw = (form_cfg.get("terms_and_conditions") or "").strip()
@@ -888,39 +1043,49 @@ def render_admission_form_html(
             html.escape(line) for line in terms_raw.splitlines() if line.strip()
         )
         decl_html = (
-            f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #E9DEBA; font-style: italic;">'
-            f"<b>Declaration:</b> {html.escape(declaration_raw)}</div>"
+            '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 5pt;">'
+            '<tr><td style="border-top: 1px solid #E9DEBA; padding-top: 4pt; font-style: italic; font-size: 8.5pt;">'
+            f"<b>Declaration:</b> {html.escape(declaration_raw)}"
+            "</td></tr></table>"
             if declaration_raw
             else ""
         )
         terms_html = f"""
-        <div style="border: 1px solid #E9DEBA; background-color: #F8F6EA; padding: 10px 12px;
-                    font-size: 11px; line-height: 1.45; margin-top: 8px;">
-            <div style="font-weight: 700; color: #012D54; margin-bottom: 4px;">
-                Rules, Terms &amp; Declaration
-            </div>
-            {terms_body}
-            {decl_html}
-        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="border: 1px solid #E9DEBA; background-color: #F8F6EA;
+                      border-collapse: collapse; font-size: 8.5pt; margin-top: 6pt;">
+            <tr>
+                <td style="padding: 6pt 9pt; line-height: 135%; background-color: #F8F6EA;">
+                    <div style="font-weight: 700; font-size: 9pt; color: #012D54; margin-bottom: 3pt;">
+                        Rules, Terms &amp; Declaration
+                    </div>
+                    <div>{terms_body}</div>
+                    {decl_html}
+                </td>
+            </tr>
+        </table>
         """
 
     student_sig = html.escape(form_cfg.get("student_sig_label") or "Student Signature")
     parent_sig = html.escape(form_cfg.get("parent_sig_label") or "Parent / Guardian Signature")
     auth_sig = html.escape(form_cfg.get("authority_sig_label") or "Authorized Signatory")
 
+    def _sig_cell(label_txt: str) -> str:
+        return (
+            '<td width="33%" align="center" valign="bottom" style="padding: 0 8pt 4pt 8pt;">'
+            '<table width="88%" cellpadding="0" cellspacing="0" border="0" align="center">'
+            '<tr><td align="center" style="border-top: 1px solid #012D54; padding-top: 3pt; '
+            'font-size: 9pt; font-weight: 700; color: #012D54;">'
+            f"{label_txt}</td></tr></table></td>"
+        )
+
     signatures_html = f"""
-    <table width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="margin-top: 32px; font-size: 11px; color: #012D54; font-weight: 700;">
+    <div style="font-size: 16pt; line-height: 16pt;">&nbsp;</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-            <td width="33%" align="center" style="padding: 0 12px;">
-                <div style="border-top: 1px solid #012D54; padding-top: 5px;">{student_sig}</div>
-            </td>
-            <td width="34%" align="center" style="padding: 0 12px;">
-                <div style="border-top: 1px solid #012D54; padding-top: 5px;">{parent_sig}</div>
-            </td>
-            <td width="33%" align="center" style="padding: 0 12px;">
-                <div style="border-top: 1px solid #012D54; padding-top: 5px;">{auth_sig}</div>
-            </td>
+            {_sig_cell(student_sig)}
+            {_sig_cell(parent_sig)}
+            {_sig_cell(auth_sig)}
         </tr>
     </table>
     """
@@ -928,18 +1093,27 @@ def render_admission_form_html(
     office_html = ""
     if show_office_use:
         office_html = """
-        <table width="100%" cellpadding="6" cellspacing="0" border="0"
-               style="margin-top: 14px; border: 1px solid #012D54; font-size: 11px;">
+        <div style="font-size: 6pt; line-height: 6pt;">&nbsp;</div>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="border: 1px solid #012D54; border-collapse: collapse; font-size: 9pt;">
             <tr style="background-color: #012D54; color: #FEFEFE; font-weight: 700;">
-                <td colspan="2">FOR OFFICE USE ONLY</td>
+                <td colspan="2" style="padding: 4pt 8pt;">FOR OFFICE USE ONLY</td>
             </tr>
             <tr>
-                <td width="50%" style="border-bottom: 1px solid #E9DEBA;">Registration Fee Paid: _____________________</td>
-                <td width="50%" style="border-bottom: 1px solid #E9DEBA;">Receipt No. &amp; Date: _______________________</td>
+                <td width="50%" style="padding: 5pt 8pt; border-bottom: 1px solid #E9DEBA; border-right: 1px solid #E9DEBA;">
+                    Registration Fee Paid: __________________
+                </td>
+                <td width="50%" style="padding: 5pt 8pt; border-bottom: 1px solid #E9DEBA;">
+                    Receipt No. &amp; Date: ____________________
+                </td>
             </tr>
             <tr>
-                <td>Batch Assigned: ____________________________</td>
-                <td>Verified By: _______________________________</td>
+                <td style="padding: 5pt 8pt; border-right: 1px solid #E9DEBA;">
+                    Batch Assigned: ______________________
+                </td>
+                <td style="padding: 5pt 8pt;">
+                    Verified By: _________________________
+                </td>
             </tr>
         </table>
         """
@@ -947,7 +1121,7 @@ def render_admission_form_html(
     return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8" /></head>
-<body style="font-family: Arial, Helvetica, sans-serif; color: #1F2937; margin: 0; padding: 6px;">
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #1F2937; margin: 0; padding: 0;">
     {letterhead}
     {top_section}
     {parent_section}

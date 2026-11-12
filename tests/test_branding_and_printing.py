@@ -24,11 +24,19 @@ from app.services.branding_service import (
     save_branding_image,
 )
 from app.services.document_service import (
+    A4_MARGIN_MM,
+    A4_PAGE_HEIGHT_MM,
+    A4_PAGE_WIDTH_MM,
+    A4_PRINTABLE_HEIGHT_PT,
+    A4_PRINTABLE_WIDTH_PT,
     DEFAULT_ADMISSION_FORM_CONFIG,
+    PASSPORT_PHOTO_HEIGHT_MM,
+    PASSPORT_PHOTO_WIDTH_MM,
     amount_to_words,
     build_admission_form_student_data,
     build_fee_receipt_data,
     get_admission_form_config,
+    mm_to_print_pt,
     render_admission_form_html,
     render_fee_receipt_html,
     reset_admission_form_config,
@@ -41,6 +49,7 @@ from app.ui.main_window import MainWindow
 from app.ui.print_dialogs import (
     AdmissionFormDialog,
     FeeReceiptDialog,
+    configure_a4_document,
     export_text_document_pdf,
 )
 from app.ui.settings_dialog import SettingsDialog
@@ -429,4 +438,64 @@ def test_payment_history_dialog_print_buttons(qapp, sample_billing_and_student):
     assert any("Print" in t for t in btn_texts)
     assert "Reverse" in btn_texts
     hist.close()
+
+
+def test_a4_geometry_units_and_passport_photo_standard(qapp, sample_billing_and_student, tmp_path):
+    """Verify A4 page constants, pt typography, and standard 35x45 mm passport photo sizing."""
+    import base64
+    import re
+    import subprocess
+    import shutil
+
+    assert A4_PAGE_WIDTH_MM == 210.0
+    assert A4_PAGE_HEIGHT_MM == 297.0
+    assert A4_MARGIN_MM == 12.0
+    assert PASSPORT_PHOTO_WIDTH_MM == 35.0
+    assert PASSPORT_PHOTO_HEIGHT_MM == 45.0
+    assert mm_to_print_pt(PASSPORT_PHOTO_WIDTH_MM) == 99
+    assert mm_to_print_pt(PASSPORT_PHOTO_HEIGHT_MM) == 128
+
+    branding = resolve_app_branding({"app_name": "TestAcademy", "coaching_name": "Test Academy"})
+    with conn.SessionLocal() as session:
+        receipt_data = build_fee_receipt_data(session, sample_billing_and_student["fee_id"])
+        student_data = build_admission_form_student_data(session, sample_billing_and_student["student_id"])
+
+    receipt_html = render_fee_receipt_html(receipt_data, branding, dual_copy=True)
+    form_html = render_admission_form_html(DEFAULT_ADMISSION_FORM_CONFIG, student_data, branding)
+
+    # Typography must strictly use absolute point (pt) sizing rather than screen px
+    assert not re.search(r"font-size:\s*[0-9.]+px", receipt_html)
+    assert not re.search(r"font-size:\s*[0-9.]+px", form_html)
+    assert "pt;" in receipt_html
+    assert "pt;" in form_html
+
+    # Passport photo SVG must carry exact 35 mm × 45 mm viewBox and 99 × 128 pt print dimensions
+    match = re.search(r'data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)" width="99" height="128"', form_html)
+    assert match is not None, "Expected 99x128 pt (35x45 mm) SVG passport photo box"
+    svg_xml = base64.b64decode(match.group(1)).decode("utf-8")
+    assert 'viewBox="0 0 35 45"' in svg_xml
+    assert "35 mm × 45 mm" in svg_xml
+
+    # Dialogs configure QTextDocument to A4 printable dimensions in points with zero internal margin
+    rec_dlg = FeeReceiptDialog(sample_billing_and_student["fee_id"])
+    assert rec_dlg.preview_browser.document().documentMargin() == 0
+    assert rec_dlg.preview_browser.document().pageSize().width() == pytest.approx(A4_PRINTABLE_WIDTH_PT)
+    assert rec_dlg.preview_browser.document().pageSize().height() == pytest.approx(A4_PRINTABLE_HEIGHT_PT)
+    rec_dlg.close()
+
+    form_dlg = AdmissionFormDialog(student_id=sample_billing_and_student["student_id"])
+    assert form_dlg.editor.document().documentMargin() == 0
+    assert form_dlg.editor.document().pageSize().width() == pytest.approx(A4_PRINTABLE_WIDTH_PT)
+    assert form_dlg.editor.document().pageSize().height() == pytest.approx(A4_PRINTABLE_HEIGHT_PT)
+
+    pdf_path = tmp_path / "a4_check.pdf"
+    export_text_document_pdf(form_dlg.editor.document(), pdf_path)
+    form_dlg.close()
+    assert pdf_path.exists()
+
+    if shutil.which("pdfinfo"):
+        info = subprocess.check_output(["pdfinfo", str(pdf_path)], text=True)
+        assert "A4" in info
+        assert "Pages:           1" in info or "Pages:          1" in info
+
 

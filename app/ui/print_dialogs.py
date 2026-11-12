@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QBuffer, QIODevice, QMarginsF, Qt
+from PyQt6.QtCore import QBuffer, QIODevice, QMarginsF, QSizeF, Qt
 from PyQt6.QtGui import (
     QFont,
     QImage,
@@ -51,11 +51,16 @@ from app.database.connection import SessionLocal
 from app.database.models.student import Student
 from app.services.branding_service import image_file_to_data_uri, resolve_app_branding
 from app.services.document_service import (
+    A4_MARGIN_MM,
+    A4_PAGE_WIDTH_MM,
+    A4_PRINTABLE_HEIGHT_PT,
+    A4_PRINTABLE_WIDTH_PT,
     DEFAULT_ADMISSION_FORM_CONFIG,
     STANDARD_ADMISSION_FIELDS,
     build_admission_form_student_data,
     build_fee_receipt_data,
     get_admission_form_config,
+    mm_to_layout_px,
     render_admission_form_html,
     render_fee_receipt_html,
     reset_admission_form_config,
@@ -99,7 +104,7 @@ def _create_configured_printer(
     page_layout = QPageLayout(
         QPageSize(QPageSize.PageSizeId.A4),
         QPageLayout.Orientation.Portrait,
-        QMarginsF(10, 10, 10, 10),
+        QMarginsF(A4_MARGIN_MM, A4_MARGIN_MM, A4_MARGIN_MM, A4_MARGIN_MM),
         QPageLayout.Unit.Millimeter,
     )
     printer.setPageLayout(page_layout)
@@ -109,17 +114,54 @@ def _create_configured_printer(
     return printer
 
 
+def configure_a4_document(document: QTextDocument) -> None:
+    """Normalizes document margins, default font, and logical A4 page size."""
+    document.setDocumentMargin(0)
+    document.setDefaultFont(QFont("Arial", 10))
+    document.setPageSize(QSizeF(A4_PRINTABLE_WIDTH_PT, A4_PRINTABLE_HEIGHT_PT))
+
+
+def _configure_a4_sheet_widget(text_widget: QTextEdit) -> QFrame:
+    """Wraps a QTextEdit/QTextBrowser as an A4-proportioned sheet centered on a subtle backdrop."""
+    sheet_width_px = mm_to_layout_px(A4_PAGE_WIDTH_MM)
+    margin_px = mm_to_layout_px(A4_MARGIN_MM)
+
+    text_widget.setFixedWidth(sheet_width_px)
+    text_widget.setStyleSheet(f"""
+        {text_widget.__class__.__name__} {{
+            background-color: #FFFFFF;
+            color: {TEXT};
+            border: 1px solid #D1C7A3;
+            border-radius: 3px;
+            padding: {margin_px}px;
+        }}
+    """)
+    configure_a4_document(text_widget.document())
+
+    backdrop = QFrame()
+    backdrop.setStyleSheet(
+        f"QFrame {{ background-color: #EAE5D3; border: 1px solid {LIGHT_GOLD}; border-radius: 6px; }}"
+    )
+    b_layout = QHBoxLayout(backdrop)
+    b_layout.setContentsMargins(16, 12, 16, 12)
+    b_layout.addStretch()
+    b_layout.addWidget(text_widget)
+    b_layout.addStretch()
+    return backdrop
+
+
 def print_text_document(
     document: QTextDocument,
     parent: QWidget,
     job_title: str = "Document",
 ) -> bool:
-    """Opens the native OS Print dialog and prints the QTextDocument."""
+    """Opens the native OS Print dialog and prints the QTextDocument sized for A4."""
     printer = _create_configured_printer()
     dialog = QPrintDialog(printer, parent)
     dialog.setWindowTitle(f"Print {job_title}")
     if dialog.exec() == QDialog.DialogCode.Accepted:
-        document.setDocumentMargin(8)
+        configure_a4_document(document)
+        document.setPageSize(QSizeF(printer.pageRect(QPrinter.Unit.Point).size()))
         document.print(printer)
         return True
     return False
@@ -129,9 +171,10 @@ def export_text_document_pdf(
     document: QTextDocument,
     filepath: str | Path,
 ) -> None:
-    """Exports the QTextDocument cleanly to an A4 PDF file."""
+    """Exports the QTextDocument cleanly to an ISO A4 PDF file."""
     printer = _create_configured_printer(pdf_path=filepath)
-    document.setDocumentMargin(8)
+    configure_a4_document(document)
+    document.setPageSize(QSizeF(printer.pageRect(QPrinter.Unit.Point).size()))
     document.print(printer)
 
 
@@ -217,7 +260,7 @@ class FeeReceiptDialog(QDialog):
         self.current_receipt_data: dict[str, Any] = {}
 
         self.setWindowTitle(f"Fee Receipt — {self.branding['app_name']}")
-        self.resize(840, 680)
+        self.resize(920, 740)
         _apply_print_dialog_styles(self)
 
         self._build_ui()
@@ -233,9 +276,9 @@ class FeeReceiptDialog(QDialog):
         header = QHBoxLayout()
         title_box = QVBoxLayout()
         title_box.setSpacing(2)
-        title = QLabel("Fee Payment Receipt")
+        title = QLabel("Fee Payment Receipt (A4)")
         title.setStyleSheet(f"color: {NAVY}; font-size: 20px; font-weight: 700;")
-        subtitle = QLabel("Preview official fee receipt, print directly, or save as PDF.")
+        subtitle = QLabel("Preview official A4 fee receipt, print directly, or save as PDF.")
         subtitle.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
@@ -257,26 +300,18 @@ class FeeReceiptDialog(QDialog):
         self.scope_combo.currentIndexChanged.connect(self._refresh_preview)
         tb_layout.addWidget(self.scope_combo, 1)
 
-        self.dual_copy_cb = QCheckBox("Dual Copy (Student + Office)")
+        self.dual_copy_cb = QCheckBox("Dual Copy (Student + Office on 1 A4 Page)")
         self.dual_copy_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         self.dual_copy_cb.toggled.connect(self._refresh_preview)
         tb_layout.addWidget(self.dual_copy_cb)
 
         layout.addWidget(toolbar_card)
 
-        # Preview canvas
+        # A4 Preview canvas
         self.preview_browser = QTextBrowser()
         self.preview_browser.setOpenExternalLinks(False)
-        self.preview_browser.setStyleSheet(f"""
-            QTextBrowser {{
-                background-color: #FFFFFF;
-                color: {TEXT};
-                border: 1px solid {LIGHT_GOLD};
-                border-radius: 6px;
-                padding: 16px;
-            }}
-        """)
-        layout.addWidget(self.preview_browser, 1)
+        a4_backdrop = _configure_a4_sheet_widget(self.preview_browser)
+        layout.addWidget(a4_backdrop, 1)
 
         # Footer action bar
         footer = QHBoxLayout()
@@ -361,6 +396,7 @@ class FeeReceiptDialog(QDialog):
             logo_data_uri=self.logo_data_uri,
         )
         self.preview_browser.setHtml(html_content)
+        configure_a4_document(self.preview_browser.document())
 
     def _on_print_clicked(self) -> None:
         receipt_no = self.current_receipt_data.get("receipt_number", "FeeReceipt")
@@ -408,7 +444,7 @@ class AdmissionFormDialog(QDialog):
             self.form_cfg = get_admission_form_config(session)
 
         self.setWindowTitle(f"Admission Form Editor & Printer — {self.branding['app_name']}")
-        self.resize(960, 740)
+        self.resize(960, 760)
         _apply_print_dialog_styles(self)
 
         self._build_ui()
@@ -585,19 +621,11 @@ class AdmissionFormDialog(QDialog):
         fmt_bar.addStretch()
         v_layout.addLayout(fmt_bar)
 
-        # Direct WYSIWYG Document Editor
+        # Direct WYSIWYG Document Editor framed at exact ISO A4 proportions
         self.editor = QTextEdit()
-        self.editor.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: #FFFFFF;
-                color: {TEXT};
-                border: 1px solid {LIGHT_GOLD};
-                border-radius: 6px;
-                padding: 18px;
-            }}
-        """)
         self.editor.cursorPositionChanged.connect(self._sync_format_buttons)
-        v_layout.addWidget(self.editor, 1)
+        sheet_backdrop = _configure_a4_sheet_widget(self.editor)
+        v_layout.addWidget(sheet_backdrop, 1)
 
         return tab
 
@@ -836,6 +864,7 @@ class AdmissionFormDialog(QDialog):
             logo_data_uri=self.logo_data_uri,
         )
         self.editor.setHtml(html_content)
+        configure_a4_document(self.editor.document())
 
     def _on_add_custom_field(self) -> None:
         text = self.custom_field_input.text().strip()
